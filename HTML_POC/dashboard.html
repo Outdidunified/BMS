@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BMS Live Dashboard</title>
+    <style>
+      :root {
+        --bg: #0f1218;
+        --panel: #161b22;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #2f81f7;
+        --ok: #3fb950;
+        --warn: #d29922;
+        --err: #f85149;
+        --cold: #79c0ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
+          Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: var(--panel);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        border-bottom: 1px solid #222b36;
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+        font-weight: 600;
+      }
+      .pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .pill.ok {
+        background: rgba(63, 185, 80, 0.2);
+        color: var(--ok);
+      }
+      .pill.err {
+        background: rgba(248, 81, 73, 0.2);
+        color: var(--err);
+      }
+      .pill.warn {
+        background: rgba(210, 153, 34, 0.2);
+        color: var(--warn);
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .align-center {
+        align-items: center;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid #222b36;
+        border-radius: 10px;
+        padding: 12px;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(140px, 1fr));
+        gap: 12px;
+        width: 100%;
+      }
+      .control {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .control label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .control input,
+      .control select,
+      .control button,
+      .control textarea {
+        background: #0b0f14;
+        border: 1px solid #263241;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .control textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+      .control button.primary {
+        background: var(--accent);
+        border: 1px solid #1f6feb;
+        cursor: pointer;
+      }
+
+      main {
+        padding: 16px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+      }
+      .col-12 { grid-column: span 12; }
+      .col-6 { grid-column: span 6; }
+      .col-4 { grid-column: span 4; }
+      .col-8 { grid-column: span 8; }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 8px;
+      }
+      .kv .k { color: var(--muted); }
+      .kv .v {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        background: #0b0f14;
+        border: 1px solid #263241;
+        color: var(--text);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid #263241; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+
+      .badge { padding: 2px 6px; border-radius: 6px; font-size: 12px; display: inline-block; }
+      .badge.ok { background: rgba(63, 185, 80, 0.2); color: var(--ok); }
+      .badge.warn { background: rgba(210, 153, 34, 0.2); color: var(--warn); }
+      .badge.err { background: rgba(248, 81, 73, 0.2); color: var(--err); }
+      .badge.cold { background: rgba(121, 192, 255, 0.2); color: var(--cold); }
+
+      .footer { color: var(--muted); font-size: 12px; padding: 8px 0 0; }
+
+      .mini { font-size: 12px; color: var(--muted); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+      @media (max-width: 1000px) {
+        .controls { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+        .col-6, .col-8, .col-4 { grid-column: span 12; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>BMS Live Dashboard</h1>
+      <span id="ws-status" class="pill warn">WS: connecting…</span>
+      <span id="api-status" class="pill warn">API: checking…</span>
+      <span id="last-update" class="pill">Last: –</span>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="controls">
+          <div class="control">
+            <label for="host">Host</label>
+            <input id="host" type="text" value="localhost" />
+          </div>
+          <div class="control">
+            <label for="api-port">API Port</label>
+            <input id="api-port" type="number" value="8070" />
+          </div>
+          <div class="control">
+            <label for="ws-port">WS Port</label>
+            <input id="ws-port" type="number" value="8071" />
+          </div>
+          <div class="control">
+            <label for="device-select">Device</label>
+            <select id="device-select"></select>
+          </div>
+          <div class="control">
+            <label>&nbsp;</label>
+            <button id="connect-btn" class="primary">Reconnect</button>
+          </div>
+          <div class="control">
+            <label>&nbsp;</label>
+            <button id="fetch-latest-btn">Fetch Latest (API)</button>
+          </div>
+          <div class="control">
+            <label>&nbsp;</label>
+            <button id="load-devices-btn">Load Devices</button>
+          </div>
+          <div class="control">
+            <label>&nbsp;</label>
+            <button id="load-docs-btn">Fetch /docs</button>
+          </div>
+        </div>
+        <div class="footer">
+          Tip: You can override via query params: ?host=localhost&api=8070&ws=8071&di=BMS001
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel col-4">
+          <h3>Device</h3>
+          <div class="kv">
+            <div class="k">Device ID</div>
+            <div class="v" id="kv-deviceId">–</div>
+            <div class="k">Battery ID</div>
+            <div class="v" id="kv-batteryId">–</div>
+            <div class="k">MAC</div>
+            <div class="v" id="kv-macId">–</div>
+            <div class="k">Timestamp</div>
+            <div class="v" id="kv-timestamp">–</div>
+          </div>
+        </div>
+        <div class="panel col-8">
+          <h3>Pack</h3>
+          <div class="row">
+            <div class="chip">Pack Voltage: <span id="packVoltage">–</span> V</div>
+            <div class="chip">Charge Current: <span id="cc">–</span> A</div>
+            <div class="chip">Discharge Current: <span id="dc">–</span> A</div>
+            <div class="chip">Load Current: <span id="lc">–</span> A</div>
+          </div>
+        </div>
+
+        <div class="panel col-6">
+          <h3>Cell Voltages</h3>
+          <table id="voltages-table">
+            <thead><tr><th>Cell</th><th>Voltage (V)</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="panel col-6">
+          <h3>Temperatures</h3>
+          <table id="temps-table">
+            <thead><tr><th>Sensor</th><th>Temp (°C)</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Devices API Panel -->
+      <section class="panel">
+        <h3>Devices API</h3>
+            <div class="row align-center">
+          <div class="col-6">
+            <h4>List Devices</h4>
+            <div class="row" style="align-items:center">
+              <label class="mini"><input type="checkbox" id="include-inactive" /> includeInactive</label>
+              <button id="btn-list-devices">GET /devices/fetch-all</button>
+            </div>
+            <div class="mini">Click a row to set as selected device</div>
+            <div style="overflow:auto; max-height: 220px; border:1px solid #263241; border-radius:8px; margin-top:8px;">
+              <table id="devices-table">
+                <thead>
+                  <tr>
+                    <th>DeviceId</th><th>BatteryId</th><th>macId</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col-6">
+            <h4>Get | Update | Delete | Status</h4>
+            <div class="row">
+              <button id="btn-get-device">GET /devices/:di</button>
+              <button id="btn-delete-device">DELETE /devices/delete/:di</button>
+            </div>
+            <div class="row">
+              <label class="mini">Status:</label>
+              <select id="upd-status">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+              <button id="btn-status-device">PATCH /devices/:di/status</button>
+            </div>
+            <h5>Create/Update</h5>
+            <div class="grid">
+              <div class="control"><label>deviceId</label><input id="dev-deviceId" /></div>
+              <div class="control"><label>batteryId</label><input id="dev-batteryId" /></div>
+              <div class="control"><label>macId</label><input id="dev-macId" /></div>
+              <div class="control"><label>apiKey</label><input id="dev-apiKey" /></div>
+              <div class="control"><label>status</label>
+                <select id="dev-status"><option value="true">true</option><option value="false">false</option></select>
+              </div>
+            </div>
+            <div class="row">
+              <button id="btn-create-device" class="primary">POST /devices/create</button>
+              <button id="btn-update-device">PUT /devices/update/:di</button>
+            </div>
+            <pre class="mono mini" id="device-detail"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Notifications API Panel -->
+      <section class="panel">
+        <h3>Notifications API</h3>
+        <div class="grid">
+          <div class="col-6">
+            <h4>Mappings</h4>
+            <div class="row">
+              <button id="btn-list-maps">GET /notifications/mapping/fetch-all</button>
+              <button id="btn-get-map">GET /notifications/mapping/:di</button>
+            </div>
+            <div style="overflow:auto; max-height: 220px; border:1px solid #263241; border-radius:8px; margin-top:8px;">
+              <table id="maps-table">
+                <thead><tr><th>Device</th><th>Emails</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col-6">
+            <h4>Upsert | Update | Delete</h4>
+            <div class="grid">
+              <div class="control"><label>deviceDI</label><input id="map-di" /></div>
+              <div class="control col-12"><label>emails (comma separated)</label><textarea id="map-emails"></textarea></div>
+            </div>
+            <div class="row">
+              <button id="btn-upsert-map" class="primary">POST /notifications/mapping/upsert</button>
+              <button id="btn-update-map">PUT /notifications/mapping/update/:di</button>
+              <button id="btn-delete-map">DELETE /notifications/mapping/delete/:di</button>
+            </div>
+            <pre class="mono mini" id="map-detail"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Telemetry + Analytics Panel -->
+      <section class="panel">
+        <h3>Telemetry Range + Analytics</h3>
+        <div class="grid">
+          <div class="col-6">
+            <h4>Telemetry Range</h4>
+            <div class="grid">
+              <div class="control"><label>from (ISO)</label><input id="range-from" placeholder="2025-01-01T00:00:00Z" /></div>
+              <div class="control"><label>to (ISO)</label><input id="range-to" placeholder="2025-12-31T23:59:59Z" /></div>
+              <div class="control"><label>limit</label><input id="range-limit" type="number" value="200" /></div>
+            </div>
+            <div class="row">
+              <button id="btn-range">GET /telemetry/range</button>
+            </div>
+            <div class="mini">Count: <span id="range-count">0</span></div>
+            <pre class="mono mini" id="range-sample"></pre>
+          </div>
+          <div class="col-6">
+            <h4>Analytics Summary</h4>
+            <div class="grid">
+              <div class="control"><label>from (ISO)</label><input id="an-from" /></div>
+              <div class="control"><label>to (ISO)</label><input id="an-to" /></div>
+            </div>
+            <div class="row">
+              <button id="btn-analytics">GET /analytics/summary</button>
+            </div>
+            <div class="mini">Count: <span id="an-count">0</span></div>
+            <div class="row">
+              <div class="chip">pv avg: <span id="an-pv-avg">–</span></div>
+              <div class="chip">pv min: <span id="an-pv-min">–</span></div>
+              <div class="chip">pv max: <span id="an-pv-max">–</span></div>
+            </div>
+            <pre class="mono mini" id="an-raw"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- API Docs Panel -->
+      <section class="panel">
+        <h3>API Docs (/docs)</h3>
+        <div class="row">
+          <button id="btn-docs">GET /docs</button>
+        </div>
+        <pre class="mono mini" id="docs-json"></pre>
+      </section>
+    </main>
+
+    <script>
+      // --- Utilities ---
+      function $(id) { return document.getElementById(id); }
+      function qp(name) { return new URLSearchParams(location.search).get(name); }
+      function fmt(n, digits = 2) { return typeof n === 'number' && isFinite(n) ? n.toFixed(digits) : '–'; }
+      function tsFmt(d) { try { return d ? new Date(d).toLocaleString() : '–'; } catch { return '–'; } }
+      function badge(text, cls) { const span = document.createElement('span'); span.className = 'badge ' + cls; span.textContent = text; return span; }
+
+      // Threshold helpers (simple, can be tuned)
+      function voltageBadge(v) { if (v == null) return badge('n/a', 'warn'); if (v < 3.3) return badge('LOW', 'err'); if (v > 4.3) return badge('HIGH', 'warn'); return badge('OK', 'ok'); }
+      function tempBadge(t) { if (t == null) return badge('n/a', 'warn'); if (t < 0) return badge('COLD', 'cold'); if (t > 60) return badge('HOT', 'err'); if (t > 45) return badge('WARM', 'warn'); return badge('OK', 'ok'); }
+
+      // --- State ---
+      const devices = new Map(); // di -> { last: doc }
+      let ws = null;
+      let wsConnectInFlight = false;
+      let wsReconnectTimer = null;
+      let wsExplicitClose = false;
+
+      function scheduleReconnect() {
+        if (wsExplicitClose) return;
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(() => connectWs(), 2000); // 2s backoff
+      }
+
+      function apiBase() {
+        const host = $('host').value.trim();
+        const apiPort = Number($('api-port').value.trim());
+        return `http://${host}:${apiPort}`;
+      }
+      async function api(path, opts) {
+        const res = await fetch(apiBase() + path, opts);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const ct = res.headers.get('content-type') || '';
+        return ct.includes('application/json') ? res.json() : res.text();
+      }
+
+      function setWsStatus(type) {
+        const el = $('ws-status');
+        if (type === 'open') { el.className = 'pill ok'; el.textContent = 'WS: connected'; }
+        else if (type === 'close') { el.className = 'pill err'; el.textContent = 'WS: closed'; }
+        else if (type === 'error') { el.className = 'pill err'; el.textContent = 'WS: error'; }
+        else { el.className = 'pill warn'; el.textContent = 'WS: connecting…'; }
+      }
+      function setApiStatus(ok, msg) {
+        const el = $('api-status');
+        if (ok) { el.className = 'pill ok'; el.textContent = 'API: ' + (msg || 'ok'); }
+        else { el.className = 'pill err'; el.textContent = 'API: ' + (msg || 'error'); }
+      }
+
+      function ensureRows(tableBody, count, label) {
+        while (tableBody.children.length < count) {
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          const tdVal = document.createElement('td');
+          const tdBadge = document.createElement('td');
+          tr.appendChild(tdName); tr.appendChild(tdVal); tr.appendChild(tdBadge);
+          tableBody.appendChild(tr);
+        }
+        for (let i = 0; i < tableBody.children.length; i++) {
+          const tr = tableBody.children[i];
+          tr.style.display = i < count ? '' : 'none';
+          if (i < count) tr.children[0].textContent = label + (i + 1);
+        }
+      }
+
+      function updateTables(tele) {
+        const vt = $('voltages-table').querySelector('tbody');
+        const tt = $('temps-table').querySelector('tbody');
+        const voltages = Array.isArray(tele?.voltages) ? tele.voltages : [];
+        const temps = Array.isArray(tele?.temperatures) ? tele.temperatures : [];
+
+        ensureRows(vt, voltages.length, 'V');
+        voltages.forEach((v, i) => {
+          const tr = vt.children[i];
+          tr.children[1].textContent = fmt(v, 3);
+          tr.children[2].innerHTML = '';
+          tr.children[2].appendChild(voltageBadge(v));
+        });
+
+        ensureRows(tt, temps.length, 'T');
+        temps.forEach((t, i) => {
+          const tr = tt.children[i];
+          tr.children[1].textContent = fmt(t, 1);
+          tr.children[2].innerHTML = '';
+          tr.children[2].appendChild(tempBadge(t));
+        });
+      }
+
+      function render(doc) {
+        const deviceId = doc?.deviceFull?.deviceId || doc?.device?.DI || '–';
+        const batteryId = doc?.deviceFull?.batteryId || doc?.device?.BI || '–';
+        const macId = doc?.deviceFull?.macId || doc?.device?.MI || '–';
+        const tele = doc?.telemetry || {};
+
+        $('kv-deviceId').textContent = deviceId;
+        $('kv-batteryId').textContent = batteryId;
+        $('kv-macId').textContent = macId;
+        $('kv-timestamp').textContent = tsFmt(doc?.timestamp);
+
+        $('packVoltage').textContent = fmt(tele.packVoltage);
+        $('cc').textContent = fmt(tele?.currents?.charging);
+        $('dc').textContent = fmt(tele?.currents?.discharging);
+        $('lc').textContent = fmt(tele?.currents?.load);
+
+        updateTables(tele);
+        $('last-update').textContent = 'Last: ' + tsFmt(Date.now());
+      }
+
+      function addDeviceToSelect(di) {
+        const sel = $('device-select');
+        const exists = Array.from(sel.options).some(o => o.value === di);
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = di; opt.textContent = di;
+          sel.appendChild(opt);
+          if (!sel.value) sel.value = di;
+        }
+      }
+
+      function onLive(payload) {
+        const doc = payload?.data;
+        const di = doc?.device?.DI || doc?.deviceFull?.deviceId;
+        if (!di) return;
+        devices.set(di, { last: doc });
+        addDeviceToSelect(di);
+
+        const selDi = $('device-select').value;
+        if (!selDi || selDi === di) render(doc);
+      }
+
+      async function connectWs(force = false) {
+        // Prevent parallel connects or reconnect while already open/connecting
+        if (wsConnectInFlight) return;
+        if (!force && ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+        wsConnectInFlight = true;
+        setWsStatus('connecting');
+
+        // We want auto-reconnects unless explicitly disconnected
+        wsExplicitClose = false;
+
+        try { if (ws) { try { ws.close(); } catch {} } } catch {}
+        const host = $('host').value.trim();
+        const wsPort = Number($('ws-port').value.trim());
+        const url = `ws://${host}:${wsPort}`;
+        ws = new WebSocket(url);
+        ws.addEventListener('open', () => { wsConnectInFlight = false; setWsStatus('open'); });
+        ws.addEventListener('close', () => { setWsStatus('close'); wsConnectInFlight = false; scheduleReconnect(); });
+        ws.addEventListener('error', () => { setWsStatus('error'); wsConnectInFlight = false; scheduleReconnect(); });
+        ws.addEventListener('message', (ev) => {
+          try { const msg = JSON.parse(ev.data); if (msg?.type === 'live') onLive(msg); } catch {}
+        });
+      }
+
+      function disconnectWs() {
+        wsExplicitClose = true;
+        clearTimeout(wsReconnectTimer);
+        try { ws?.close(); } catch {}
+      }
+
+      async function checkApiHealth() {
+        try {
+          const j = await api('/health');
+          setApiStatus(true, j?.status || 'ok');
+        } catch (e) { setApiStatus(false, 'unreachable'); }
+      }
+
+      async function fetchLatest() {
+        const di = $('device-select').value.trim();
+        if (!di) return;
+        try { const doc = await api(`/telemetry/latest?di=${encodeURIComponent(di)}`); render(doc); }
+        catch (e) { alert('Failed to fetch latest: ' + e.message); }
+      }
+
+      // --- Devices API ---
+      function setSelectedDevice(di) {
+        if (!di) return;
+        addDeviceToSelect(di);
+        $('device-select').value = di;
+        $('dev-deviceId').value = di;
+      }
+
+      async function listDevices() {
+        const includeInactive = $('include-inactive').checked;
+        const data = await api(`/devices/fetch-all?includeInactive=${includeInactive}`);
+        const tbody = $('devices-table').querySelector('tbody');
+        tbody.innerHTML = '';
+        data.forEach((d) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="mono">${d.deviceId || d.DI || ''}</td>
+                          <td class="mono">${d.batteryId || d.BI || ''}</td>
+                          <td class="mono">${d.macId || d.MI || ''}</td>
+                          <td>${d.status === false ? '<span class="badge warn">inactive</span>' : '<span class="badge ok">active</span>'}</td>`;
+          tr.style.cursor = 'pointer';
+          tr.addEventListener('click', () => setSelectedDevice(d.deviceId || d.DI));
+          tbody.appendChild(tr);
+        });
+        // seed selector with first device if empty
+        if (data.length && !$('device-select').value) setSelectedDevice(data[0].deviceId || data[0].DI);
+      }
+
+      async function getDevice() {
+        const di = $('device-select').value.trim(); if (!di) return;
+        const d = await api(`/devices/${encodeURIComponent(di)}`);
+        $('device-detail').textContent = JSON.stringify(d, null, 2);
+        $('dev-deviceId').value = d.deviceId || d.DI || '';
+        $('dev-batteryId').value = d.batteryId || d.BI || '';
+        $('dev-macId').value = d.macId || d.MI || '';
+        $('dev-apiKey').value = d.apiKey || '';
+        $('dev-status').value = String(d.status !== false);
+      }
+
+      async function createDevice() {
+        const body = {
+          deviceId: $('dev-deviceId').value.trim(),
+          batteryId: $('dev-batteryId').value.trim(),
+          macId: $('dev-macId').value.trim(),
+          apiKey: $('dev-apiKey').value.trim() || undefined,
+          status: $('dev-status').value === 'true',
+        };
+        const d = await api('/devices/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        alert('Created');
+        $('device-detail').textContent = JSON.stringify(d, null, 2);
+        setSelectedDevice(d.deviceId || d.DI);
+        await listDevices();
+      }
+
+      async function updateDevice() {
+        const di = $('device-select').value.trim(); if (!di) return;
+        const body = {
+          deviceId: $('dev-deviceId').value.trim(),
+          batteryId: $('dev-batteryId').value.trim(),
+          macId: $('dev-macId').value.trim(),
+          apiKey: $('dev-apiKey').value.trim() || undefined,
+          status: $('dev-status').value === 'true',
+        };
+        const d = await api(`/devices/update/${encodeURIComponent(di)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        alert('Updated');
+        $('device-detail').textContent = JSON.stringify(d, null, 2);
+        await listDevices();
+      }
+
+      async function updateDeviceStatus() {
+        const di = $('device-select').value.trim(); if (!di) return;
+        const status = $('upd-status').value === 'true';
+        const d = await api(`/devices/${encodeURIComponent(di)}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+        alert('Status updated');
+        $('device-detail').textContent = JSON.stringify(d, null, 2);
+        await listDevices();
+      }
+
+      async function deleteDevice() {
+        const di = $('device-select').value.trim(); if (!di) return;
+        if (!confirm(`Delete device ${di}?`)) return;
+        await api(`/devices/delete/${encodeURIComponent(di)}`, { method: 'DELETE' });
+        alert('Deleted');
+        $('device-detail').textContent = '';
+        await listDevices();
+      }
+
+      // --- Notifications API ---
+      function parseEmailsInput() {
+        const text = $('map-emails').value || '';
+        return text.split(',').map(s => s.trim()).filter(Boolean);
+      }
+
+      function tableToMappings(docs) {
+        const tbody = $('maps-table').querySelector('tbody');
+        tbody.innerHTML = '';
+        docs.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="mono">${m.deviceDI}</td><td class="mono">${Array.isArray(m.emails) ? m.emails.join(', ') : ''}</td>`;
+          tr.style.cursor = 'pointer';
+          tr.addEventListener('click', () => {
+            $('map-di').value = m.deviceDI;
+            $('map-emails').value = (m.emails || []).join(', ');
+            setSelectedDevice(m.deviceDI);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function listMappings() { const docs = await api('/notifications/mapping/fetch-all'); tableToMappings(docs); }
+      async function getMappingForSelected() {
+        const di = $('device-select').value.trim() || $('map-di').value.trim();
+        if (!di) return alert('Select or enter device DI');
+        try {
+          const doc = await api(`/notifications/mapping/${encodeURIComponent(di)}`);
+          $('map-detail').textContent = JSON.stringify(doc, null, 2);
+          $('map-di').value = doc.deviceDI;
+          $('map-emails').value = (doc.emails || []).join(', ');
+        } catch (e) {
+          $('map-detail').textContent = 'Not found';
+        }
+      }
+      async function upsertMapping() {
+        const deviceDI = $('map-di').value.trim() || $('device-select').value.trim();
+        const emails = parseEmailsInput();
+        if (!deviceDI) return alert('deviceDI required');
+        const doc = await api('/notifications/mapping/upsert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceDI, emails }) });
+        $('map-detail').textContent = JSON.stringify(doc, null, 2);
+        await listMappings();
+      }
+      async function updateMapping() {
+        const di = $('map-di').value.trim() || $('device-select').value.trim();
+        if (!di) return alert('deviceDI required');
+        const emails = parseEmailsInput();
+        const doc = await api(`/notifications/mapping/update/${encodeURIComponent(di)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emails }) });
+        $('map-detail').textContent = JSON.stringify(doc, null, 2);
+        await listMappings();
+      }
+      async function deleteMapping() {
+        const di = $('map-di').value.trim() || $('device-select').value.trim();
+        if (!di) return alert('deviceDI required');
+        if (!confirm(`Delete mapping for ${di}?`)) return;
+        await api(`/notifications/mapping/delete/${encodeURIComponent(di)}`, { method: 'DELETE' });
+        $('map-detail').textContent = '';
+        await listMappings();
+      }
+
+      // --- Telemetry Range + Analytics ---
+      async function fetchRange() {
+        const di = $('device-select').value.trim(); if (!di) return alert('Select device');
+        const from = $('range-from').value.trim();
+        const to = $('range-to').value.trim();
+        const limit = Number($('range-limit').value.trim() || '200');
+        const params = new URLSearchParams({ di });
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        if (limit) params.set('limit', String(limit));
+        const docs = await api(`/telemetry/range?${params.toString()}`);
+        $('range-count').textContent = Array.isArray(docs) ? docs.length : 0;
+        $('range-sample').textContent = Array.isArray(docs) && docs.length ? JSON.stringify(docs[docs.length - 1], null, 2) : '';
+      }
+
+      async function fetchAnalytics() {
+        const di = $('device-select').value.trim(); if (!di) return alert('Select device');
+        const from = $('an-from').value.trim();
+        const to = $('an-to').value.trim();
+        const params = new URLSearchParams({ di });
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        const res = await api(`/analytics/summary?${params.toString()}`);
+        $('an-count').textContent = res?.count ?? 0;
+        const avg = res?.avg || {}; const min = res?.min || {}; const max = res?.max || {};
+        $('an-pv-avg').textContent = fmt(avg.pv);
+        $('an-pv-min').textContent = fmt(min.pv);
+        $('an-pv-max').textContent = fmt(max.pv);
+        $('an-raw').textContent = JSON.stringify(res || {}, null, 2);
+      }
+
+      // --- Docs ---
+      async function fetchDocs() { try { const j = await api('/docs'); $('docs-json').textContent = JSON.stringify(j, null, 2); } catch (e) { alert('/docs failed: ' + e.message); } }
+
+      // --- Init ---
+      (function init() {
+        // Pre-fill from query params
+        const qHost = qp('host');
+        const qApi = qp('api');
+        const qWs = qp('ws');
+        const qDi = qp('di');
+        if (qHost) $('host').value = qHost;
+        if (qApi) $('api-port').value = qApi;
+        if (qWs) $('ws-port').value = qWs;
+        if (qDi) { addDeviceToSelect(qDi); $('device-select').value = qDi; }
+
+        $('connect-btn').addEventListener('click', () => connectWs(true));
+        $('fetch-latest-btn').addEventListener('click', fetchLatest);
+        $('load-devices-btn').addEventListener('click', listDevices);
+        $('load-docs-btn').addEventListener('click', fetchDocs);
+
+        $('btn-list-devices').addEventListener('click', listDevices);
+        $('btn-get-device').addEventListener('click', getDevice);
+        $('btn-create-device').addEventListener('click', () => createDevice().catch(e => alert(e.message)));
+        $('btn-update-device').addEventListener('click', () => updateDevice().catch(e => alert(e.message)));
+        $('btn-status-device').addEventListener('click', () => updateDeviceStatus().catch(e => alert(e.message)));
+        $('btn-delete-device').addEventListener('click', () => deleteDevice().catch(e => alert(e.message)));
+
+        $('btn-list-maps').addEventListener('click', () => listMappings().catch(e => alert(e.message)));
+        $('btn-get-map').addEventListener('click', () => getMappingForSelected().catch(e => alert(e.message)));
+        $('btn-upsert-map').addEventListener('click', () => upsertMapping().catch(e => alert(e.message)));
+        $('btn-update-map').addEventListener('click', () => updateMapping().catch(e => alert(e.message)));
+        $('btn-delete-map').addEventListener('click', () => deleteMapping().catch(e => alert(e.message)));
+
+        $('btn-range').addEventListener('click', () => fetchRange().catch(e => alert(e.message)));
+        $('btn-analytics').addEventListener('click', () => fetchAnalytics().catch(e => alert(e.message)));
+        $('btn-docs').addEventListener('click', fetchDocs);
+
+        connectWs();
+        checkApiHealth();
+        setInterval(checkApiHealth, 15000);
+      })();
+    </script>
+  </body>
+</html>

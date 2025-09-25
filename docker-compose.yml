@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  frontend:
+    container_name: frontend
+    build: ./FRONTEND
+    ports:
+      - "7777:7777"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - appnet      
+
+  backend:
+    container_name: backend
+    build:
+      context: ./BACKEND
+      target: ${BUILD_TARGET:-production}     # selects the correct Dockerfile stage
+    ports:
+      - "8070:8070"
+      - "8071:8071"
+      - "8072:8072"
+    restart: always
+    networks:
+      - appnet
+    volumes:
+      - ./BACKEND/public:/app/public
+    env_file:
+      - ./BACKEND/.env.${ENV}
+    environment:
+      ENV: ${ENV}
+      NODE_ENV: ${ENV}            
+
+networks:
+  appnet:
