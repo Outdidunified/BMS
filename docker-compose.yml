@@ -18,9 +18,9 @@ services:
       context: ./BACKEND
       target: ${BUILD_TARGET:-production}     # selects the correct Dockerfile stage
     ports:
-      - "8070:8070"
-      - "8071:8071"
-      - "8072:8072"
+      - "8070:8070" # Http
+      - "8071:8071" # WebSocket
+      - "8072:8072" # Ingestion Port
     restart: always
     networks:
       - appnet
