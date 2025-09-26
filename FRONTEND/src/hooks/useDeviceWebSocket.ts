@@ -12,6 +12,7 @@ interface UseDeviceWebSocketOptions {
   onMessage?: (msg: LiveMessage) => void;
   reconnect?: boolean;
   reconnectDelayMs?: number;
+  key?: string; // key to force reconnect when changed
 }
 
 // Reusable WebSocket hook for backend live frames
@@ -21,23 +22,36 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
     onMessage,
     reconnect = true,
     reconnectDelayMs = 2000,
+    key,
   } = options;
 
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<LiveMessage | null>(null);
   const reconnectTimer = useRef<number | null>(null);
+  const messageQueue = useRef<any[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
     const connect = () => {
       if (cancelled) return;
+      messageQueue.current = []; // Clear queue for new connection
       try {
         const ws = new WebSocket(url);
         wsRef.current = ws;
 
-        ws.onopen = () => setConnected(true);
+        ws.onopen = () => {
+          setConnected(true);
+          // Send queued messages
+          while (messageQueue.current.length > 0) {
+            const msg = messageQueue.current.shift();
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(typeof msg === "string" ? msg : JSON.stringify(msg));
+              console.log('Sent queued WS message');
+            }
+          }
+        };
         ws.onclose = (event) => {
           console.log('WebSocket closed', event.code, event.reason);
           setConnected(false);
@@ -79,7 +93,7 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
       }
       wsRef.current = null;
     };
-  }, [url, reconnect, reconnectDelayMs, onMessage]);
+  }, [url, reconnect, reconnectDelayMs, onMessage, key]);
 
   const send = (data: any) => {
     console.log('Sending WS message:', data);
@@ -87,7 +101,8 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
       wsRef.current.send(typeof data === "string" ? data : JSON.stringify(data));
       console.log('Sent WS message');
     } else {
-      console.log('WS not open, readyState:', wsRef.current?.readyState);
+      console.log('WS not open, queueing message, readyState:', wsRef.current?.readyState);
+      messageQueue.current.push(data);
     }
   };
 

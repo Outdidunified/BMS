@@ -41,6 +41,7 @@ export default function MenuLevel() {
   const [currentPage, setCurrentPage] = useState("Live Monitoring");
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [liveData, setLiveData] = useState([]);
+  const [activeDevices, setActiveDevices] = useState<string[]>([]);
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showLogsPopup, setShowLogsPopup] = useState(false);
@@ -55,6 +56,9 @@ export default function MenuLevel() {
   const [events, setEvents] = useState([]);
   const [toastAlerts, setToastAlerts] = useState([]);
   const maxHistoryPoints = 50; // Keep last 50 data points for trends
+
+  // Device mapping for quick lookup
+  const deviceMap = useMemo(() => new Map(liveData.map(d => [d.deviceId, d])), [liveData]);
 
   // Load devices from API
   useEffect(() => {
@@ -113,6 +117,12 @@ export default function MenuLevel() {
   // Memoized WebSocket message handler
   const handleWebSocketMessage = useCallback((msg) => {
     console.log('WebSocket message received:', msg);
+
+    if (msg?.type === 'hello') {
+      setActiveDevices(msg.devices || []);
+      console.log('Active devices from backend:', msg.devices);
+      return;
+    }
 
     if (msg?.type === 'live') {
       const di = msg.data?.device?.DI || msg.data?.deviceFull?.deviceId || msg.data?.deviceId;
@@ -187,6 +197,7 @@ export default function MenuLevel() {
     reconnect: true,
     reconnectDelayMs: 2000,
     onMessage: handleWebSocketMessage,
+    key: selectedDeviceId,
   });
 
   // Connection status monitoring
@@ -194,19 +205,13 @@ export default function MenuLevel() {
     if (wsConnected) {
       console.log('WebSocket connected');
       addEvent('Connection', 'Live monitoring connected', 'info');
-
-      // Only subscribe to selected device when connected (not all devices)
-      if (selectedDeviceId) {
-        console.log('Subscribing to selected device:', selectedDeviceId);
-        wsSend({ type: 'subscribe', deviceId: selectedDeviceId });
-      }
     } else {
       console.log('WebSocket disconnected');
       addEvent('Connection', 'Live monitoring disconnected', 'warning');
     }
-  }, [wsConnected, selectedDeviceId]);
+  }, [wsConnected]);
 
-  // Subscribe to selected device when it changes
+  // Subscribe to selected device when connected
   useEffect(() => {
     if (wsConnected && selectedDeviceId) {
       console.log('Subscribing to device:', selectedDeviceId);
