@@ -28,6 +28,7 @@ export async function createDevice(req, res) {
             alerts: b.alerts || {},
             meta: b.meta || {},
             status: typeof b.status === 'boolean' ? b.status : true, // default active
+            connected: false, // default disconnected
         };
         const device = await Device.create(doc);
         logger.loggerSuccess(`Device created id=${device?.deviceId} status=${device.status}`);

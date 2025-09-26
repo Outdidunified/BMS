@@ -45,16 +45,48 @@ function shouldPush(lastParams, newParams) {
 export function setupWebSocket(server) {
     wss = new WebSocketServer({ server });
     wss.on('connection', (ws) => {
+        ws.subscriptions = new Set();
         ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
         logger.loggerInfo('WebSocket client connected');
+
+        ws.on('message', (data) => {
+            console.log('Received WS message:', data.toString());
+            try {
+                const msg = JSON.parse(data.toString());
+                console.log('Parsed WS message:', msg);
+                if (msg.type === 'subscribe') {
+                    ws.subscriptions = new Set([msg.deviceId]);
+                    logger.loggerInfo(`Client subscribed to device ${msg.deviceId}`);
+                } else if (msg.type === 'ping') {
+                    ws.send(JSON.stringify({ type: 'pong', timestamp: msg.timestamp }));
+                    logger.loggerPingPong(`Ping from client, sent pong`);
+                }
+            } catch (e) {
+                logger.loggerWarn(`Invalid message from client: ${data.toString()}`);
+            }
+        });
+
+        ws.on('close', (code, reason) => {
+            logger.loggerInfo(`WebSocket client disconnected: code ${code}, reason ${reason}`);
+        });
+
+        ws.on('error', (error) => {
+            logger.loggerError(`WebSocket error: ${error.message}`);
+        });
     });
     logger.loggerInfo('WebSocket server ready');
 }
 
-function broadcast(payload) {
+export function broadcast(payload, deviceId = null) {
     if (!wss) return;
     const message = JSON.stringify(payload);
-    for (const client of wss.clients) if (client.readyState === 1) client.send(message);
+    for (const client of wss.clients) {
+        if (client.readyState === 1) {
+            if (deviceId === null || client.subscriptions.has(deviceId)) {
+                client.send(message);
+            }
+        }
+    }
 }
 
 export function handleIncomingFrame(doc) {
