@@ -38,7 +38,8 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
         wsRef.current = ws;
 
         ws.onopen = () => setConnected(true);
-        ws.onclose = () => {
+        ws.onclose = (event) => {
+          console.log('WebSocket closed', event.code, event.reason);
           setConnected(false);
           wsRef.current = null;
           if (reconnect && !cancelled) {
@@ -46,7 +47,8 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
             reconnectTimer.current = window.setTimeout(connect, reconnectDelayMs);
           }
         };
-        ws.onerror = () => {
+        ws.onerror = (event) => {
+          console.log('WebSocket error', event);
           // allow reconnect flow to handle
         };
         ws.onmessage = (e) => {
@@ -80,8 +82,12 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
   }, [url, reconnect, reconnectDelayMs, onMessage]);
 
   const send = (data: any) => {
+    console.log('Sending WS message:', data);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(typeof data === "string" ? data : JSON.stringify(data));
+      console.log('Sent WS message');
+    } else {
+      console.log('WS not open, readyState:', wsRef.current?.readyState);
     }
   };
 
