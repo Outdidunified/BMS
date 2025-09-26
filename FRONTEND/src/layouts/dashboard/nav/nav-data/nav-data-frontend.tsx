@@ -9,6 +9,7 @@ export const frontendNavData: NavProps["data"] = [
 				title: "Dashboard",
 				path: "/dashboard",
 				icon: <Icon icon="local:ic-analysis" size="24" />,
+				 
 			},
 			{
 				title: "Live Grid",

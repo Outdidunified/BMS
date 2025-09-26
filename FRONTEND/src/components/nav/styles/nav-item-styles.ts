@@ -24,6 +24,8 @@ export const navItemStyles: NavItemStyles = {
 		flexDirection: "column",
 		justifyContent: "center",
 		flex: "1 1 auto",
+				marginTop: "8px", // <-- add top margin here
+
 	},
 	title: {
 		display: "-webkit-box",

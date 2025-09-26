@@ -8,7 +8,7 @@ export default {
 	content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
 	theme: {
 		fontFamily: createTailwinConfg("typography.fontFamily"),
-		extend: {
+		extend: {	
 			colors: {
 				// BMS admin theme tokens
 				primary: creatColorChannel("colors.palette.primary"),
