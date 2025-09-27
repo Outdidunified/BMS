@@ -4,10 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Badge } from "@/ui/badge";
 import { Icon } from "@/components/icon";
 import { Title } from "@/ui/typography";
+import { Skeleton } from "@/ui/skeleton";
 import Swal from 'sweetalert2';
 import { useDeviceWebSocket } from "@/hooks/useDeviceWebSocket";
 import devicesService from "@/api/services/devicesService";
 import telemetryService from "@/api/services/telemetryService";
+import { Wifi } from "lucide-react"; 
+
 
 // No static data - all data will come from API and WebSocket
 
@@ -47,6 +50,8 @@ export default function MenuLevel() {
   const [showLogsPopup, setShowLogsPopup] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [analyticsData, setAnalyticsData] = useState([]);
+  const [isLoadingDevice, setIsLoadingDevice] = useState(false);
+  const [liveStreamingMode, setLiveStreamingMode] = useState(false);
   
   // Enhanced live monitoring state
   const [live, setLive] = useState(null);
@@ -56,6 +61,7 @@ export default function MenuLevel() {
   const [events, setEvents] = useState([]);
   const [toastAlerts, setToastAlerts] = useState([]);
   const maxHistoryPoints = 50; // Keep last 50 data points for trends
+  const logsContainerRef = useRef(null);
 
   // Device mapping for quick lookup
   const deviceMap = useMemo(() => new Map(liveData.map(d => [d.deviceId, d])), [liveData]);
@@ -118,6 +124,9 @@ export default function MenuLevel() {
   const handleWebSocketMessage = useCallback((msg) => {
     console.log('WebSocket message received:', msg);
 
+    // Log incoming WebSocket frames
+    setLogs(prev => [...prev.slice(-99), `${new Date().toLocaleTimeString()} - ${JSON.stringify(msg)}`]);
+
     if (msg?.type === 'hello') {
       setActiveDevices(msg.devices || []);
       console.log('Active devices from backend:', msg.devices);
@@ -157,6 +166,7 @@ export default function MenuLevel() {
       const newData = msg.data;
       setLive(newData);
       setLastLiveUpdate(Date.now());
+      setIsLoadingDevice(false);
 
       // Add to historical data for trends
       const timestamp = new Date().toLocaleTimeString();
@@ -193,7 +203,7 @@ export default function MenuLevel() {
 
   // WebSocket connection for live data
   const { connected: wsConnected, send: wsSend } = useDeviceWebSocket({
-    url: "ws://localhost:8071",
+    url: "ws://192.168.1.17:8071",
     reconnect: true,
     reconnectDelayMs: 2000,
     onMessage: handleWebSocketMessage,
@@ -247,6 +257,9 @@ export default function MenuLevel() {
     setLive(null);
     setLastLiveUpdate(0);
     setHistoricalData([]);
+    setIsLoadingDevice(true);
+    const timeout = setTimeout(() => setIsLoadingDevice(false), 10000); // Stop loading after 10 seconds if no data
+    return () => clearTimeout(timeout);
   }, [selectedDeviceId]);
 
   // Clear stale live data if no update for 30 seconds
@@ -264,6 +277,13 @@ export default function MenuLevel() {
   }, [lastLiveUpdate, addEvent]);
 
   const params = useMemo(() => extractParams(live), [live]);
+
+  // Auto-scroll logs to bottom when new logs arrive
+  useEffect(() => {
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   // Enhanced alerts system with event detection
   useEffect(() => {
@@ -537,7 +557,14 @@ useEffect(() => {
             searchTerm === "" ||
             d.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
             d.batteryId.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        ).sort((a, b) => {
+          if (liveStreamingMode) {
+            if (a.connected && !b.connected) return -1;
+            if (!a.connected && b.connected) return 1;
+            return 0;
+          }
+          return 0;
+        });
         const selectedDevice = selectedDeviceId ? liveData.find(d => d.deviceId === selectedDeviceId) : null;
         return (
           <div className="space-y-6">
@@ -643,9 +670,18 @@ useEffect(() => {
             {/* Device Selection */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Device Selection</CardTitle>
-                </CardHeader>
+              <CardHeader>
+  <div className="flex items-center justify-between">
+    <CardTitle>Device Selection</CardTitle>
+    <button
+      onClick={() => setLiveStreamingMode(!liveStreamingMode)}
+      className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse transition-colors hover:bg-green-600"
+    >
+      <Wifi size={16} />
+      Click to see online devices
+    </button>
+  </div>
+</CardHeader>
                 <CardContent>
                   <div className="mb-4">
                     <input
@@ -684,14 +720,22 @@ useEffect(() => {
                   <CardTitle>Recent Events</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {events.length === 0 ? (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {liveData.filter(d => !d.connected).length > 0 ? (
+                      liveData.filter(d => !d.connected).map(device => (
+                        <div key={device.deviceId} className="p-2 rounded text-sm border-l-2 bg-yellow-50 border-yellow-500 text-yellow-800">
+                          <div className="font-semibold">Device {device.deviceId} Offline</div>
+                          <div className="text-xs">The device {device.deviceId} is currently offline. Please check the connection.</div>
+                          <div className="text-xs opacity-75">{new Date().toLocaleTimeString()}</div>
+                        </div>
+                      ))
+                    ) : events.length === 0 ? (
                       <p className="text-gray-500 text-sm">No events recorded</p>
                     ) : (
                       events.slice(0, 10).map(event => (
                         <div key={event.id} className={`p-2 rounded text-sm border-l-2 ${
-                          event.severity === 'error' ? 'bg-red-50 border-red-500 text-red-800' : 
-                          event.severity === 'warning' ? 'bg-yellow-50 border-yellow-500 text-yellow-800' : 
+                          event.severity === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
+                          event.severity === 'warning' ? 'bg-yellow-50 border-yellow-500 text-yellow-800' :
                           'bg-blue-50 border-blue-500 text-blue-800'
                         }`}>
                           <div className="font-semibold">{event.type}</div>
@@ -735,286 +779,391 @@ useEffect(() => {
               )}
             </div>
             {/* Detailed Device Monitoring */}
-            {params && Object.keys(params).length > 0 && (
-              <div className="space-y-6">
-                {/* Device Info and Pack Overview */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Device Information</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-gray-600">Device ID</div>
-                        <div className="text-black font-medium">{selectedDeviceId}</div>
-                        <div className="text-gray-600">Connection</div>
-                        <div className={`font-medium ${selectedDevice?.connected ? 'text-green-600' : 'text-red-600'}`}>
-                          {selectedDevice?.connected ? 'Online' : 'Offline'}
-                        </div>
-                        <div className="text-gray-600">Mode</div>
-                        <div className="text-black font-medium">{statusFromParams(params)}</div>
-                        <div className="text-gray-600">Last Update</div>
-                        <div className="text-black font-medium">{new Date().toLocaleTimeString()}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>System Health</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Voltage Imbalance</span>
-                          <span className={`font-medium ${systemAnalytics.voltageImbalance > 0.2 ? 'text-red-600' : 'text-green-600'}`}>
-                            {systemAnalytics.voltageImbalance.toFixed(3)}V
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Temperature Variance</span>
-                          <span className={`font-medium ${systemAnalytics.tempVariance > 15 ? 'text-red-600' : 'text-green-600'}`}>
-                            {systemAnalytics.tempVariance.toFixed(1)}°C
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">SOH Estimate</span>
-                          <span className={`font-medium ${systemAnalytics.sohEstimate < 80 ? 'text-red-600' : 'text-green-600'}`}>
-                            {systemAnalytics.sohEstimate.toFixed(0)}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Power</span>
-                          <span className="font-medium text-blue-600">
-                            {systemAnalytics.power.toFixed(1)}W
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+            {selectedDeviceId && (isLoadingDevice || (params && Object.keys(params).length > 0)) && (
+  <div className="space-y-6">
+    {isLoadingDevice ? (
+      // Skeleton loading UI
+      <>
+        {/* Device Info and Pack Overview Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-28" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-16" />
                 </div>
-                {/* Voltage and Temperature Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Cell Voltages</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={voltageChartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="cell" />
-                          <YAxis domain={['dataMin - 0.1', 'dataMax + 0.1']} />
-                          <Tooltip formatter={(value) => [`${value.toFixed(3)}V`, 'Voltage']} />
-                          <Bar dataKey="voltage" fill={(entry) => {
-                            const voltage = entry.voltage;
-                            return voltage > 4.2 ? '#EF4444' : voltage < 3.0 ? '#F59E0B' : '#10B981';
-                          }} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Temperature Sensors</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={temperatureChartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="sensor" />
-                          <YAxis />
-                          <Tooltip formatter={(value) => [`${value.toFixed(1)}°C`, 'Temperature']} />
-                          <Bar dataKey="temperature" fill={(entry) => {
-                            const temp = entry.temperature;
-                            return temp > 60 ? '#EF4444' : temp < 0 ? '#3B82F6' : '#10B981';
-                          }} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-12" />
                 </div>
-
-                {/* Detailed Tables */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Cell Voltage Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-64 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-white">
-                            <tr className="border-b">
-                              <th className="text-left py-2">Cell</th>
-                              <th className="text-left py-2">Voltage</th>
-                              <th className="text-left py-2">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {voltageChartData.map((cell, i) => (
-                              <tr key={i} className="border-b border-gray-100">
-                                <td className="py-2">{cell.cell}</td>
-                                <td className="py-2 font-mono">{cell.voltage.toFixed(3)}V</td>
-                                <td className="py-2">
-                                  <Badge variant={cell.status === 'High' ? 'destructive' : cell.status === 'Low' ? 'secondary' : 'default'}>
-                                    {cell.status}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Temperature Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="max-h-64 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-white">
-                            <tr className="border-b">
-                              <th className="text-left py-2">Sensor</th>
-                              <th className="text-left py-2">Temperature</th>
-                              <th className="text-left py-2">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {temperatureChartData.map((sensor, i) => (
-                              <tr key={i} className="border-b border-gray-100">
-                                <td className="py-2">{sensor.sensor}</td>
-                                <td className="py-2 font-mono">{sensor.temperature.toFixed(1)}°C</td>
-                                <td className="py-2">
-                                  <Badge variant={sensor.status === 'High' ? 'destructive' : sensor.status === 'Low' ? 'secondary' : 'default'}>
-                                    {sensor.status}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-14" />
                 </div>
-                {/* Trend Analysis */}
-                {trendData.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Historical Trends</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <LineChart data={trendData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="timestamp" />
-                          <YAxis yAxisId="voltage" orientation="left" />
-                          <YAxis yAxisId="current" orientation="right" />
-                          <Tooltip />
-                          <Legend />
-                          <Line yAxisId="voltage" type="monotone" dataKey="packVoltage" stroke="#8B5CF6" name="Pack Voltage (V)" />
-                          <Line yAxisId="voltage" type="monotone" dataKey="avgVoltage" stroke="#10B981" name="Avg Cell Voltage (V)" />
-                          <Line yAxisId="current" type="monotone" dataKey="chargingCurrent" stroke="#06B6D4" name="Charging Current (A)" />
-                          <Line yAxisId="current" type="monotone" dataKey="dischargingCurrent" stroke="#EF4444" name="Discharge Current (A)" />
-                          <Area yAxisId="voltage" type="monotone" dataKey="maxTemp" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.3} name="Max Temperature (°C)" />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* System Performance Metrics */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Voltage Statistics</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Average</span>
-                          <span className="font-mono">{systemAnalytics.avgVoltage.toFixed(3)}V</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Minimum</span>
-                          <span className="font-mono">{systemAnalytics.minVoltage.toFixed(3)}V</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Maximum</span>
-                          <span className="font-mono">{systemAnalytics.maxVoltage.toFixed(3)}V</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Imbalance</span>
-                          <span className={`font-mono ${systemAnalytics.voltageImbalance > 0.2 ? 'text-red-600' : 'text-green-600'}`}>
-                            {systemAnalytics.voltageImbalance.toFixed(3)}V
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Temperature Statistics</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Average</span>
-                          <span className="font-mono">{systemAnalytics.avgTemp.toFixed(1)}°C</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Minimum</span>
-                          <span className="font-mono">{systemAnalytics.minTemp.toFixed(1)}°C</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Maximum</span>
-                          <span className="font-mono">{systemAnalytics.maxTemp.toFixed(1)}°C</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Variance</span>
-                          <span className={`font-mono ${systemAnalytics.tempVariance > 15 ? 'text-red-600' : 'text-green-600'}`}>
-                            {systemAnalytics.tempVariance.toFixed(1)}°C
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Power & Efficiency</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Power</span>
-                          <span className="font-mono">{systemAnalytics.power.toFixed(1)}W</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Rolling Avg Voltage</span>
-                          <span className="font-mono">{systemAnalytics.rollingAvgVoltage.toFixed(2)}V</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Rolling Avg Current</span>
-                          <span className="font-mono">{systemAnalytics.rollingAvgCurrent.toFixed(2)}A</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">Efficiency</span>
-                          <span className="font-mono">{systemAnalytics.efficiency.toFixed(1)}%</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-16" />
                 </div>
               </div>
-            )}
-            {(!params || Object.keys(params).length === 0) && (
+            </CardContent>
+          </Card>
+        </div>
+        {/* Voltage and Temperature Charts Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-24" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-80 w-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-80 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+        {/* Detailed Tables Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-28" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-64 w-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-64 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+        {/* Trend Analysis Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-24" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-96 w-full" />
+          </CardContent>
+        </Card>
+      </>
+    ) : (
+      // Device Info and Monitoring UI
+      <>
+        {/* Device Info and Pack Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Device Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-gray-600">Device ID</div>
+                <div className="text-black font-medium">{selectedDeviceId}</div>
+                <div className="text-gray-600">Connection</div>
+                <div className={`font-medium ${selectedDevice?.connected ? 'text-green-600' : 'text-red-600'}`}>
+                  {selectedDevice?.connected ? 'Online' : 'Offline'}
+                </div>
+                <div className="text-gray-600">Mode</div>
+                <div className="text-black font-medium">{statusFromParams(params)}</div>
+                <div className="text-gray-600">Last Update</div>
+                <div className="text-black font-medium">{new Date().toLocaleTimeString()}</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>System Health</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Voltage Imbalance</span>
+                  <span className={`font-medium ${systemAnalytics.voltageImbalance > 0.2 ? 'text-red-600' : 'text-green-600'}`}>
+                    {systemAnalytics.voltageImbalance.toFixed(3)}V
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Temperature Variance</span>
+                  <span className={`font-medium ${systemAnalytics.tempVariance > 15 ? 'text-red-600' : 'text-green-600'}`}>
+                    {systemAnalytics.tempVariance.toFixed(1)}°C
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">SOH Estimate</span>
+                  <span className={`font-medium ${systemAnalytics.sohEstimate < 80 ? 'text-red-600' : 'text-green-600'}`}>
+                    {systemAnalytics.sohEstimate.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Power</span>
+                  <span className="font-medium text-blue-600">
+                    {systemAnalytics.power.toFixed(1)}W
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        {/* Voltage and Temperature Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+       <Card>
+  <CardHeader>
+    <CardTitle>Cell Voltages</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={voltageChartData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="cell" />
+        <YAxis domain={['dataMin - 0.1', 'dataMax + 0.1']} />
+        <Tooltip formatter={(value: number) => [`${value.toFixed(3)}V`, 'Voltage']} />
+        <Bar dataKey="voltage">
+          {voltageChartData.map((entry, index) => {
+            const voltage = entry.voltage;
+            const fill = voltage > 4.2 ? '#EF4444' : voltage < 3.0 ? '#F59E0B' : '#10B981';
+            return <Cell key={`cell-${index}`} fill={fill} />;
+          })}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </CardContent>
+</Card>
+  <Card>
+            <CardHeader>
+              <CardTitle>Cell Voltage Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2">Cell</th>
+                      <th className="text-left py-2">Voltage</th>
+                      <th className="text-left py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {voltageChartData.map((cell, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-2">{cell.cell}</td>
+                        <td className="py-2 font-mono">{cell.voltage.toFixed(3)}V</td>
+                        <td className="py-2">
+                          <Badge variant={cell.status === 'High' ? 'destructive' : cell.status === 'Low' ? 'secondary' : 'default'}>
+                            {cell.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+        {/* Detailed Tables */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+           <Card>
+            <CardHeader>
+              <CardTitle>Temperature Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2">Sensor</th>
+                      <th className="text-left py-2">Temperature</th>
+                      <th className="text-left py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {temperatureChartData.map((sensor, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-2">{sensor.sensor}</td>
+                        <td className="py-2 font-mono">{sensor.temperature.toFixed(1)}°C</td>
+                        <td className="py-2">
+                          <Badge variant={sensor.status === 'High' ? 'destructive' : sensor.status === 'Low' ? 'secondary' : 'default'}>
+                            {sensor.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Temperature Sensors</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={temperatureChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="sensor" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${value.toFixed(1)}°C`, 'Temperature']} />
+                  <Bar dataKey="temperature">
+                    {temperatureChartData.map((entry, index) => {
+                      const temp = entry.temperature;
+                      const fill = temp > 60 ? '#EF4444' : temp < 0 ? '#3B82F6' : '#10B981';
+                      return <Cell key={`cell-${index}`} fill={fill} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        
+         
+        </div>
+        {/* Trend Analysis */}
+        {trendData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Historical Trends</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="timestamp" />
+                  <YAxis yAxisId="voltage" orientation="left" />
+                  <YAxis yAxisId="current" orientation="right" />
+                  <Tooltip />
+                  <Legend />
+                  <Line yAxisId="voltage" type="monotone" dataKey="packVoltage" stroke="#8B5CF6" name="Pack Voltage (V)" />
+                  <Line yAxisId="voltage" type="monotone" dataKey="avgVoltage" stroke="#10B981" name="Avg Cell Voltage (V)" />
+                  <Line yAxisId="current" type="monotone" dataKey="chargingCurrent" stroke="#06B6D4" name="Charging Current (A)" />
+                  <Line yAxisId="current" type="monotone" dataKey="dischargingCurrent" stroke="#EF4444" name="Discharge Current (A)" />
+                  <Area yAxisId="voltage" type="monotone" dataKey="maxTemp" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.3} name="Max Temperature (°C)" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+        {/* System Performance Metrics */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Voltage Statistics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Average</span>
+                  <span className="font-mono">{systemAnalytics.avgVoltage.toFixed(3)}V</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Minimum</span>
+                  <span className="font-mono">{systemAnalytics.minVoltage.toFixed(3)}V</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Maximum</span>
+                  <span className="font-mono">{systemAnalytics.maxVoltage.toFixed(3)}V</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Imbalance</span>
+                  <span className={`font-mono ${systemAnalytics.voltageImbalance > 0.2 ? 'text-red-600' : 'text-green-600'}`}>
+                    {systemAnalytics.voltageImbalance.toFixed(3)}V
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Temperature Statistics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Average</span>
+                  <span className="font-mono">{systemAnalytics.avgTemp.toFixed(1)}°C</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Minimum</span>
+                  <span className="font-mono">{systemAnalytics.minTemp.toFixed(1)}°C</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Maximum</span>
+                  <span className="font-mono">{systemAnalytics.maxTemp.toFixed(1)}°C</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Variance</span>
+                  <span className={`font-mono ${systemAnalytics.tempVariance > 15 ? 'text-red-600' : 'text-green-600'}`}>
+                    {systemAnalytics.tempVariance.toFixed(1)}°C
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Power & Efficiency</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Power</span>
+                  <span className="font-mono">{systemAnalytics.power.toFixed(1)}W</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Rolling Avg Voltage</span>
+                  <span className="font-mono">{systemAnalytics.rollingAvgVoltage.toFixed(2)}V</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Rolling Avg Current</span>
+                  <span className="font-mono">{systemAnalytics.rollingAvgCurrent.toFixed(2)}A</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Efficiency</span>
+                  <span className="font-mono">{systemAnalytics.efficiency.toFixed(1)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    )}
+  </div>
+)}
+            {selectedDeviceId && !isLoadingDevice && (!params || Object.keys(params).length === 0) && (
               <div className="text-center py-12">
                 <Icon icon="mdi:information-outline" size="48" className="mx-auto text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Live Data Available</h3>
@@ -1226,9 +1375,9 @@ useEffect(() => {
         <main className="flex-1 p-6 overflow-y-auto">{renderContent()}</main>
       </div>
       {showLogsPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-black text-green-400 font-mono p-6 rounded-lg w-4/5 h-4/5 max-w-4xl max-h-96 overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black z-50 p-4">
+          <div className="w-full h-full bg-black text-green-400 font-mono flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b border-green-400">
               <h3 className="text-lg font-bold">Terminal Logs</h3>
               <button
                 onClick={() => setShowLogsPopup(false)}
@@ -1237,8 +1386,8 @@ useEffect(() => {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto bg-gray-900 p-4 rounded border border-gray-700">
-              {logs.slice(-100).map((log, i) => (
+            <div ref={logsContainerRef} className="flex-1 overflow-y-auto p-4">
+              {logs.map((log, i) => (
                 <div key={i} className="mb-1">{log}</div>
               ))}
             </div>

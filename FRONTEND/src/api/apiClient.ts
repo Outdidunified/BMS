@@ -7,7 +7,7 @@ import { ResultStatus } from "#/enum";
 
 // Centralized Axios instance for live backend
 export const axiosInstance = axios.create({
-	baseURL: "http://localhost:8070",
+	baseURL: "http://192.168.1.17:8070",
 	timeout: 50000,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
