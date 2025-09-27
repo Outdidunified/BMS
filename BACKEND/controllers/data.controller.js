@@ -1,6 +1,6 @@
 import Telemetry from '../data/Telemetry.model.js';
 import Device from '../data/Device.model.js';
-import { handleIncomingFrame } from '../Websocket/hub.js';
+import { handleIncomingFrame, broadcast } from '../Websocket/hub.js';
 import { evaluateAndSendAlerts } from '../utils/alerts.js';
 import logger from '../utils/logger.js';
 
@@ -62,6 +62,14 @@ export async function ingestData(req, res) {
 
         await Telemetry.collection.insertOne(doc);
         handleIncomingFrame(doc);
+
+        // Update device connected status
+        if (!device.connected) {
+            await Device.findOneAndUpdate({ deviceId }, { connected: true });
+            broadcast({ type: 'device_connected', deviceId }, deviceId);
+            logger.loggerInfo(`Device ${deviceId} connected`);
+        }
+
         evaluateAndSendAlerts(
             // Create a minimal device object for alerts with DI compatibility
             { ...device, DI: device.deviceId || device.DI },

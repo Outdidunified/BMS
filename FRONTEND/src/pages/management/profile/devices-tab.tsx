@@ -1,194 +1,452 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/ui/input";
 import { Button } from "@/ui/button";
 import { Icon } from "@/components/icon";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import devicesService, { type DeviceDoc, type DeviceDto } from "@/api/services/devicesService";
+import Swal from "sweetalert2";
+import { Switch } from "@/ui/switch"; 
+
+interface Device {
+  deviceId: string;
+  batteryId: string;
+  macId: string;
+  status: boolean;
+  // status?: "Active" | "Inactive";
+}
+
+const API_BASE = "http://192.168.1.17:8070";
 
 export default function DevicesTab() {
-  // Static mock devices
-  const [devices, setDevices] = useState([
-    { deviceId: "DVC-001", batteryId: "BAT-001", macId: "AA:BB:CC:DD:EE:01", status: true, apiKey: "key1", alerts: true, meta: {} },
-    { deviceId: "DVC-002", batteryId: "BAT-002", macId: "AA:BB:CC:DD:EE:02", status: false, apiKey: "key2", alerts: false, meta: {} },
-    { deviceId: "DVC-003", batteryId: "BAT-003", macId: "AA:BB:CC:DD:EE:03", status: true, apiKey: "key3", alerts: true, meta: {} },
-  ]);
-
-  const refetch = () => {}; // No-op for static
-  const isLoading = false;
-
-  // Mock mutations
-  const createMutation = {
-    mutate: (payload: DeviceDto) => {
-      setDevices(prev => [...prev, { ...payload, status: true, apiKey: "newkey", alerts: false, meta: {} }]);
-    },
-    isPending: false,
-  };
-  const updateMutation = {
-    mutate: ({ di, data }: { di: string; data: Partial<DeviceDto> }) => {
-      setDevices(prev => prev.map(d => d.deviceId === di ? { ...d, ...data } : d));
-    },
-    isPending: false,
-  };
-  const statusMutation = {
-    mutate: ({ di, status }: { di: string; status: boolean }) => {
-      setDevices(prev => prev.map(d => d.deviceId === di ? { ...d, status } : d));
-    },
-  };
-  const deleteMutation = {
-    mutate: (di: string) => {
-      setDevices(prev => prev.filter(d => d.deviceId !== di));
-    },
-    isPending: false,
-  };
-
+  const [devices, setDevices] = useState<Device[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newDevice, setNewDevice] = useState<Partial<DeviceDto>>({});
-  const [editingId, setEditingId] = useState<string | null>(null); // use deviceId as key
-  const [editDevice, setEditDevice] = useState<Partial<DeviceDto>>({});
+  const [newDevice, setNewDevice] = useState<Partial<Device>>({});
+  const [loading, setLoading] = useState(false);
 
-  const handleAdd = () => {
-    if (!newDevice.deviceId || !newDevice.batteryId || !newDevice.macId) return;
-    createMutation.mutate({
-      deviceId: newDevice.deviceId,
-      batteryId: newDevice.batteryId,
-      macId: newDevice.macId,
-      apiKey: newDevice.apiKey,
-      alerts: newDevice.alerts,
-      meta: newDevice.meta,
-      status: typeof newDevice.status === "boolean" ? newDevice.status : true,
-    } as DeviceDto);
-    setNewDevice({});
-    setShowAddForm(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDevice, setEditDevice] = useState<Partial<Device>>({});
+  const [viewDevice, setViewDevice] = useState<Device | null>(null);
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Fetch all devices
+ const fetchDevices = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/devices/fetch-all?includeInactive=true`);
+    const data = await res.json();
+
+    let devicesData: Device[] = [];
+
+    if (Array.isArray(data)) {
+      devicesData = data;
+    } else if (Array.isArray(data.data)) {
+      devicesData = data.data;
+    }
+
+    // ✅ Normalize boolean -> "Active" | "Inactive"
+   setDevices(
+  devicesData.map((d: any) => ({
+    ...d,
+    status: d.status === true, // 👈 ensure it's boolean
+  }))
+);
+  } catch (err) {
+    console.error("Error fetching devices:", err);
+  }
+};
+
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  // Add device
+  const handleAdd = async () => {
+    if (!newDevice.deviceId || !newDevice.batteryId || !newDevice.macId) {
+      setErrorMessage("All fields are required.");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/devices/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newDevice),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        setErrorMessage(errData.message || "Failed to add device.");
+        return;
+      }
+
+      setNewDevice({});
+      setShowAddForm(false);
+      fetchDevices();
+      await Swal.fire({
+  title: "Success",
+  text: "Device added successfully!",
+  icon: "success",
+  confirmButtonText: "OK",
+});
+    } catch (err) {
+      console.error("Error adding device:", err);
+      setErrorMessage("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (deviceId: string) => {
-    deleteMutation.mutate(deviceId);
+  // View device
+  const handleView = async (deviceId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/devices/${deviceId}`, { method: "GET" });
+      const data = await res.json();
+      if (data && data.data) {
+        setViewDevice(data.data);
+      } else {
+        console.error("Unexpected response:", data);
+      }
+    } catch (err) {
+      console.error("Error viewing device:", err);
+    }
   };
 
-  const handleEdit = (device: DeviceDoc) => {
-    const di = device.deviceId;
-    setEditingId(di);
-    setEditDevice({ deviceId: di, batteryId: device.batteryId, macId: device.macId, apiKey: device.apiKey, alerts: device.alerts, meta: device.meta, status: device.status });
+  // Handle inline edit
+  const handleEditChange = (field: keyof Device, value: string) => {
+    setEditDevice((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
-  const handleUpdate = (di: string) => {
-    const { deviceId, batteryId, macId, apiKey, alerts, meta, status } = editDevice;
-    updateMutation.mutate({ di, data: { deviceId, batteryId, macId, apiKey, alerts, meta, status } });
-    setEditingId(null);
+  // Update device
+  const handleUpdate = async (deviceId: string) => {
+    if (!editDevice.deviceId || !editDevice.batteryId || !editDevice.macId) {
+      setErrorMessage("All fields are required.");
+      return;
+    }
+
+    setUpdatingId(deviceId);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/devices/update/${deviceId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editDevice),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.message || "Failed to update device.");
+        return;
+      }
+
+      setDevices((prev) =>
+        prev.map((d) => (d.deviceId === deviceId ? { ...d, ...editDevice } : d))
+      );
+
+      setEditingId(null);
+      setEditDevice({});
+
+      await Swal.fire({
+        title: "Success",
+        text: data.message || "Device updated successfully",
+        icon: "success",
+        confirmButtonText: "OK",
+      });
+
+      fetchDevices();
+    } catch (err) {
+      console.error("Error updating device:", err);
+      setErrorMessage("Network error. Please try again.");
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
-  const [search, setSearch] = useState("");
-  const filteredDevices = useMemo(() => {
-    const term = search.toLowerCase();
-    return devices.filter((d) =>
-      d.deviceId?.toLowerCase().includes(term) ||
-      d.batteryId?.toLowerCase().includes(term) ||
-      d.macId?.toLowerCase().includes(term)
+  // Activate/Deactivate device
+ const handleToggleStatus = async (device: Device) => {
+const newStatus = !device.status;   try {
+    const res = await fetch(`${API_BASE}/devices/${device.deviceId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Failed to update status:", data);
+      return;
+    }
+
+     setDevices((prev) =>
+      prev.map((d) =>
+        d.deviceId === device.deviceId ? { ...d, status: newStatus } : d
+      )
     );
-  }, [devices, search]);
+     await Swal.fire({
+      title: "Success",
+      text: `Device ${device.deviceId} is now ${
+        newStatus ? "Active" : "Inactive"
+      }`,
+      icon: "success",
+      confirmButtonText: "OK",
+    });
+  } catch (err) {
+    console.error("Error updating device status:", err);
+     await Swal.fire({
+      title: "Error",
+      text: "Failed to update device status. Please try again.",
+      icon: "error",
+      confirmButtonText: "OK",
+    });
+  }
+};
 
-  const onlineCount = devices.filter((d) => d.status === true).length;
-  const offlineCount = devices.filter((d) => d.status === false).length;
+
 
   return (
     <div className="p-6 border rounded-xl shadow-lg bg-white flex flex-col gap-6">
-      {/* Heading and Add Button */}
+      {/* Heading */}
       <div className="flex justify-between items-start">
-        <div className="flex flex-col gap-1">
+        <div>
           <h2 className="text-2xl font-bold text-gray-800">Device Overview</h2>
-          <p className="text-gray-500">Monitor and manage all your BNS devices from a single interface</p>
+          <p className="text-gray-500">Monitor and manage all your BMS devices</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button className="bg-gray-100" onClick={() => refetch()} disabled={isLoading}>
-            <Icon icon="lucide:refresh-ccw" /> Refresh
-          </Button>
-          <Button className="flex items-center gap-2 text-green-600 hover:text-green-700 bg-transparent" onClick={() => setShowAddForm(!showAddForm)}>
-            <Icon icon="lucide:plus" /> Add Device
-          </Button>
-        </div>
+        <Button
+          className="flex items-center gap-2 text-green-600 hover:text-green-700 bg-transparent"
+          onClick={() => setShowAddForm(!showAddForm)}
+        >
+          <Icon icon="lucide:plus" /> Add Device
+        </Button>
       </div>
 
       {/* Add Device Form */}
       {showAddForm && (
-        <div className="flex flex-wrap gap-2 items-center mt-4 mb-4 p-4 border rounded-lg bg-gray-50">
-          <Input placeholder="Device ID" value={newDevice.deviceId || ""} onChange={(e) => setNewDevice({ ...newDevice, deviceId: e.target.value })} className="flex-1 min-w-[120px]" />
-          <Input placeholder="Battery ID" value={newDevice.batteryId || ""} onChange={(e) => setNewDevice({ ...newDevice, batteryId: e.target.value })} className="flex-1 min-w-[120px]" />
-          <Input placeholder="MAC ID" value={newDevice.macId || ""} onChange={(e) => setNewDevice({ ...newDevice, macId: e.target.value })} className="flex-1 min-w-[150px]" />
-          <Input placeholder="API Key (optional)" value={newDevice.apiKey || ""} onChange={(e) => setNewDevice({ ...newDevice, apiKey: e.target.value })} className="flex-1 min-w-[150px]" />
-          <Button className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2" onClick={handleAdd} disabled={createMutation.isPending}>
-            <Icon icon="lucide:check" /> Save
-          </Button>
+        <div className="flex flex-col gap-2 mt-4 mb-4 p-4 border rounded-lg bg-gray-50">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Input
+              placeholder="Device ID"
+              value={newDevice.deviceId || ""}
+              onChange={(e) => setNewDevice({ ...newDevice, deviceId: e.target.value })}
+              className="flex-1 min-w-[120px]"
+            />
+            <Input
+              placeholder="Battery ID"
+              value={newDevice.batteryId || ""}
+              onChange={(e) => setNewDevice({ ...newDevice, batteryId: e.target.value })}
+              className="flex-1 min-w-[120px]"
+            />
+            <Input
+              placeholder="MAC Address"
+              value={newDevice.macId || ""}
+              onChange={(e) => setNewDevice({ ...newDevice, macId: e.target.value })}
+              className="flex-1 min-w-[150px]"
+            />
+            <Button
+              className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2"
+              onClick={handleAdd}
+              disabled={loading}
+            >
+              <Icon icon="lucide:check" /> {loading ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
         </div>
       )}
 
-      {/* Search and Status */}
-      <div className="flex justify-between items-center mt-2">
-        <div className="relative flex-1">
-          <Input placeholder="Search devices..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-          <Icon icon="lucide:search" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        </div>
-        <div className="flex gap-4 ml-4">
-          <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">Online: {onlineCount}</div>
-          <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full font-medium">Offline: {offlineCount}</div>
-        </div>
-      </div>
-
       {/* Devices Table */}
-      <div className="overflow-x-auto mt-4">
-        <table className="min-w-full border-collapse">
-          <thead className="bg-gray-100 text-gray-700">
-            <tr>
-              <th className="py-3 px-4 text-left font-semibold">Device ID</th>
-              <th className="py-3 px-4 text-left font-semibold">Battery ID</th>
-              <th className="py-3 px-4 text-left font-semibold">MAC ID</th>
-              <th className="py-3 px-4 text-left font-semibold">Status</th>
-              <th className="py-3 px-4 text-center font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDevices.map((device) => (
-              <tr key={device.deviceId} className="bg-white hover:bg-gray-50 transition-colors">
-                <td className="py-3 px-4">{device.deviceId}</td>
-                <td className="py-3 px-4">{device.batteryId}</td>
-                <td className="py-3 px-4">{device.macId}</td>
-                <td className="py-3 px-4">
-                  {editingId === device.deviceId ? (
-                    <Input value={String(editDevice.status ?? device.status ?? true)} onChange={(e) => setEditDevice({ ...editDevice, status: e.target.value === "true" })} />
-                  ) : (
-                    <span className={`px-2 py-1 rounded-full font-medium ${device.status ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                      {device.status ? "Online" : "Offline"}
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-center flex justify-center gap-2">
-                  {editingId === device.deviceId ? (
-                    <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={() => handleUpdate(device.deviceId)} disabled={updateMutation.isPending}>
-                      <Icon icon="lucide:check" />
-                    </Button>
-                  ) : (
-                    <>
-                      <Button size="icon" variant="outline" onClick={() => handleEdit(device)}>
-                        <Icon icon="lucide:edit" />
-                      </Button>
-                      <Button size="icon" variant="outline" onClick={() => statusMutation.mutate({ di: device.deviceId, status: !device.status })}>
-                        <Icon icon={device.status ? "lucide:toggle-right" : "lucide:toggle-left"} />
-                      </Button>
-                      <Button size="icon" variant="destructive" onClick={() => handleDelete(device.deviceId)} disabled={deleteMutation.isPending}>
-                        <Icon icon="lucide:trash" />
-                      </Button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {filteredDevices.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-4 px-4 text-center text-gray-400">No devices found.</td>
-              </tr>
+     {/* Devices Table */}
+<div className="overflow-x-auto mt-4">
+  <table className="min-w-full border-collapse">
+    <thead className="bg-gray-100 text-gray-700">
+      <tr>
+        <th className="py-3 px-4 text-left font-semibold">Device ID</th>
+        <th className="py-3 px-4 text-left font-semibold">Battery ID</th>
+        <th className="py-3 px-4 text-left font-semibold">MAC Address</th>
+            <th className="py-3 px-4 text-left font-semibold">Status</th>
+        <th className="py-3 px-4 text-left font-semibold">Actions</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {devices.map((device) => (
+        <tr key={device.deviceId} className="bg-white hover:bg-gray-50 transition-colors">
+          {/* Device ID */}
+         <td className="py-3 px-4">
+  {editingId === device.deviceId ? (
+    updatingId === device.deviceId ? (
+      <span className="text-gray-400">Updating...</span>
+    ) : (
+      // ✅ Show plain text instead of input
+      <span className="text-gray-700 font-medium">{device.deviceId}</span>
+    )
+  ) : (
+    device.deviceId
+  )}
+</td>
+
+
+          {/* Battery ID */}
+          <td className="py-3 px-4">
+            {editingId === device.deviceId ? (
+              updatingId === device.deviceId ? (
+                <span className="text-gray-400">Updating...</span>
+              ) : (
+                <Input
+                  value={editDevice.batteryId || ""}
+                  onChange={(e) => handleEditChange("batteryId", e.target.value)}
+                  className="w-full"
+                />
+              )
+            ) : (
+              device.batteryId
             )}
-          </tbody>
-        </table>
+          </td>
+
+          {/* MAC Address */}
+          <td className="py-3 px-4">
+            {editingId === device.deviceId ? (
+              updatingId === device.deviceId ? (
+                <span className="text-gray-400">Updating...</span>
+              ) : (
+                <Input
+                  value={editDevice.macId || ""}
+                  onChange={(e) => handleEditChange("macId", e.target.value)}
+                  className="w-full"
+                />
+              )
+            ) : (
+              device.macId
+            )}
+          </td>
+          {/* status column */}
+            <td className="py-3 px-4">
+  <span
+    className={`px-3 py-1 rounded-full text-sm font-semibold ${
+      device.status ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+    }`}
+  >
+    {device.status ? "Active" : "Inactive"}
+  </span>
+</td>
+
+
+          {/* Actions Column */}
+         <td className="py-3 px-4 flex gap-2">
+  {editingId === device.deviceId ? (
+    <>
+      <Button
+        className="bg-green-500 text-white"
+        onClick={() => handleUpdate(device.deviceId)}
+        disabled={loading}
+      >
+        <Icon icon="lucide:check" />
+      </Button>
+      <Button
+        className="bg-gray-200 text-gray-700"
+        onClick={() => setEditingId(null)}
+      >
+        Cancel
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button
+        size="icon"
+        variant="outline"
+        onClick={() => {
+          setEditingId(device.deviceId);
+          setEditDevice(device);
+        }}
+      >
+        <Icon icon="lucide:edit" />
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => handleView(device.deviceId)}
+      >
+        View
+      </Button>
+        {/* ✅ Centered Switch */}
+      <div className="flex items-center justify-center">
+        <Switch
+          checked={device.status}
+          onCheckedChange={() => handleToggleStatus(device)}
+        />
       </div>
+    </>
+  )}
+</td>
+
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+
+      {/* Device Detail Modal */}
+      {viewDevice && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative animate-slide-up">
+            <button
+              onClick={() => setViewDevice(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <Icon icon="lucide:x" size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <Icon icon="lucide:cpu" size={28} className="text-green-500" />
+              <h3 className="text-xl font-bold text-gray-800">Device Details</h3>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between bg-gray-50 p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-600">Device ID:</span>
+                <span className="text-gray-800">{viewDevice.deviceId}</span>
+              </div>
+              <div className="flex justify-between bg-gray-50 p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-600">Battery ID:</span>
+                <span className="text-gray-800">{viewDevice.batteryId}</span>
+              </div>
+              <div className="flex justify-between bg-gray-50 p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-600">MAC Address:</span>
+                <span className="text-gray-800">{viewDevice.macId}</span>
+              </div>
+              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-600">Status:</span>
+                <span
+  className={`px-3 py-1 rounded-full text-sm font-semibold ${
+    viewDevice.status ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+  }`}
+>
+  {viewDevice.status ? "Active" : "Inactive"}
+</span>
+
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                variant="outline"
+                className="hover:bg-gray-100"
+                onClick={() => setViewDevice(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { ResultStatus } from "#/enum";
 
 // Centralized Axios instance for live backend
 export const axiosInstance = axios.create({
-	baseURL: "http://192.168.1.8:8070",
+	baseURL: "http://localhost:8070",
 	timeout: 50000,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
@@ -30,6 +30,12 @@ axiosInstance.interceptors.response.use(
 		if (payload && typeof payload === "object" && "status" in payload && "data" in payload) {
 			const { status, data, message } = payload as Result<any>;
 			if (status === ResultStatus.SUCCESS) return data as any;
+			throw new Error(message || t("sys.api.apiRequestFailed"));
+		}
+		// Handle API responses with "success" field
+		if (payload && typeof payload === "object" && "success" in payload && "data" in payload) {
+			const { success, data, message } = payload;
+			if (success === true) return data as any;
 			throw new Error(message || t("sys.api.apiRequestFailed"));
 		}
 		return payload as any;

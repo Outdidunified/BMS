@@ -9,9 +9,11 @@ import notificationsRoutes from './routes/notifications.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import telemetryRoutes from './routes/telemetry.routes.js';
 import dataRoutes from './routes/data.routes.js';
-import { setupWebSocket } from './Websocket/hub.js';
+import { setupWebSocket, broadcast } from './Websocket/hub.js';
 import logger from './utils/logger.js';
 import responseFormatter from './middlewares/response.js';
+import Device from './data/Device.model.js';
+import Telemetry from './data/Telemetry.model.js';
 
 // Load environment variables dynamically based on NODE_ENV
 const env = process.env.NODE_ENV || 'production';
@@ -110,15 +112,35 @@ async function start() {
     });
 
     // WebSocket server (standalone port)
-    const wsServer = http.createServer((req, res) => {
-        // Optional: simple response on HTTP request to WS port
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('WebSocket endpoint. Use WS protocol to connect.');
-    });
+    const wsServer = http.createServer();
     setupWebSocket(wsServer);
     wsServer.listen(WS_PORT, () => {
         logger.loggerSuccess(`WebSocket listening on ${WS_PORT} [env=${env}]`);
     });
+
+    // Periodic check for disconnected devices
+    setInterval(async () => {
+        try {
+            const now = new Date();
+            const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+            // Find devices that are connected but have no telemetry in last 5 minutes
+            const disconnectedDevices = await Device.find({ connected: true });
+            for (const device of disconnectedDevices) {
+                const lastTelemetries = await Telemetry.collection.find({ 'deviceFull.deviceId': device.deviceId })
+                    .sort({ timestamp: -1 })
+                    .limit(1)
+                    .toArray();
+                const lastTelemetry = lastTelemetries[0];
+                if (!lastTelemetry || lastTelemetry.timestamp < fiveMinutesAgo) {
+                    await Device.findOneAndUpdate({ deviceId: device.deviceId }, { connected: false });
+                    broadcast({ type: 'device_disconnected', deviceId: device.deviceId }, device.deviceId);
+                    logger.loggerInfo(`Device ${device.deviceId} disconnected`);
+                }
+            }
+        } catch (err) {
+            logger.loggerError(`Disconnected check error: ${err.message || err}`);
+        }
+    }, 5 * 60 * 1000); // Every 5 minutes
 }
 
 start().catch((err) => {
