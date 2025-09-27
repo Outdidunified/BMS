@@ -228,41 +228,53 @@ const newStatus = !device.status;   try {
       </div>
 
       {/* Add Device Form */}
-      {showAddForm && (
-        <div className="flex flex-col gap-2 mt-4 mb-4 p-4 border rounded-lg bg-gray-50">
-          <div className="flex flex-wrap gap-2 items-center">
-            <Input
-              placeholder="Device ID"
-              value={newDevice.deviceId || ""}
-              onChange={(e) => setNewDevice({ ...newDevice, deviceId: e.target.value })}
-              className="flex-1 min-w-[120px]"
-            />
-            <Input
-              placeholder="Battery ID"
-              value={newDevice.batteryId || ""}
-              onChange={(e) => setNewDevice({ ...newDevice, batteryId: e.target.value })}
-              className="flex-1 min-w-[120px]"
-            />
-            <Input
-              placeholder="MAC Address"
-              value={newDevice.macId || ""}
-              onChange={(e) => setNewDevice({ ...newDevice, macId: e.target.value })}
-              className="flex-1 min-w-[150px]"
-            />
-            <Button
-              className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2"
-              onClick={handleAdd}
-              disabled={loading}
-            >
-              <Icon icon="lucide:check" /> {loading ? "Saving..." : "Save"}
-            </Button>
-          </div>
-          {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
-        </div>
-      )}
+     {/* Add Device Form */}
+{showAddForm && (
+  <div className="flex flex-col gap-2 mt-4 mb-4 p-4 border rounded-lg bg-gray-50">
+    <div className="flex flex-wrap gap-2 items-center">
+      <Input
+        placeholder="Device ID"
+        value={newDevice.deviceId || ""}
+        onChange={(e) => setNewDevice({ ...newDevice, deviceId: e.target.value })}
+        className="flex-1 min-w-[120px]"
+      />
+      <Input
+        placeholder="Battery ID"
+        value={newDevice.batteryId || ""}
+        onChange={(e) => setNewDevice({ ...newDevice, batteryId: e.target.value })}
+        className="flex-1 min-w-[120px]"
+      />
+      <Input
+        placeholder="MAC Address"
+        value={newDevice.macId || ""}
+        onChange={(e) => setNewDevice({ ...newDevice, macId: e.target.value })}
+        className="flex-1 min-w-[150px]"
+      />
+
+      {/* Save Button */}
+      <Button
+        className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2"
+        onClick={handleAdd}
+        disabled={loading}
+      >
+        <Icon icon="lucide:check" /> {loading ? "Saving..." : "Save"}
+      </Button>
+
+      {/* Cancel Button with X Icon */}
+      <Button
+        className="bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-2"
+        onClick={() => setShowAddForm(false)}
+      >
+        <Icon icon="lucide:x" /> Cancel
+      </Button>
+    </div>
+
+    {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
+  </div>
+)}
+
 
       {/* Devices Table */}
-     {/* Devices Table */}
 <div className="overflow-x-auto mt-4">
   <table className="min-w-full border-collapse">
     <thead className="bg-gray-100 text-gray-700">
