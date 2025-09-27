@@ -9,6 +9,8 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		{ path: "devices", element: Component("/pages/devices") },
 		{ path: "notifications", element: Component("/pages/notifications") },
 		{ path: "analytics", element: Component("/pages/analytics") },
+		{ path: "history", element: Component("/pages/history") },
+		{ path: "history/:deviceId", element: Component("/pages/history/[deviceId]") },
 
 		{
 			path: "management",
