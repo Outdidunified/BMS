@@ -1372,7 +1372,7 @@ useEffect(() => {
   return (
     <div className="flex h-screen bg-gray-100">
       <div className="flex-1 flex flex-col">
-        <main className="flex-1 p-6 overflow-y-auto">{renderContent()}</main>
+        <main className="flex-1 p-6">{renderContent()}</main>
       </div>
       {showLogsPopup && (
         <div className="fixed inset-0 bg-black z-50 p-4">
