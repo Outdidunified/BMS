@@ -670,18 +670,44 @@ useEffect(() => {
             {/* Device Selection */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card>
-              <CardHeader>
+<CardHeader>
   <div className="flex items-center justify-between">
     <CardTitle>Device Selection</CardTitle>
-    <button
-      onClick={() => setLiveStreamingMode(!liveStreamingMode)}
-      className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse transition-colors hover:bg-green-600"
-    >
-      <Wifi size={16} />
-      Click to see online devices
-    </button>
+
+    {/* When WebSocket is connected */}
+    {wsConnected ? (
+      filteredData.some(device => device.connected) ? (
+        // Case: At least one online device
+        <button
+          onClick={() => setLiveStreamingMode(!liveStreamingMode)}
+          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse hover:bg-green-600 transition-colors"
+        >
+          <Wifi size={16} />
+          Click to see online devices
+        </button>
+      ) : (
+        // Case: All devices offline
+        <button
+          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-red-500 text-white cursor-not-allowed"
+          disabled
+        >
+          <Wifi size={16} />
+          Every device is offline
+        </button>
+      )
+    ) : (
+      // When WebSocket is disconnected
+      <button
+        className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-400 text-gray-700 cursor-not-allowed"
+        disabled
+      >
+        <Wifi size={16} />
+        Click to see online devices
+      </button>
+    )}
   </div>
 </CardHeader>
+
                 <CardContent>
                   <div className="mb-4">
                     <input
