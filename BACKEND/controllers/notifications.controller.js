@@ -81,3 +81,21 @@ export async function deleteMapping(req, res) {
         return res.fail(err.message || 'deleteMapping error', 400);
     }
 }
+
+export async function deleteSpecificEmail(req, res) {
+    try {
+        const { di, email } = req.params;
+        const doc = await Notification.findOne({ deviceDI: di });
+        if (!doc) {
+            logger.loggerWarn(`deleteSpecificEmail mapping not found DI=${di}`);
+            return res.fail('Mapping not found', 404);
+        }
+        const newEmails = doc.emails.filter(e => e !== email);
+        await Notification.updateOne({ deviceDI: di }, { emails: newEmails });
+        logger.loggerSuccess(`Email ${email} removed from mapping DI=${di}`);
+        return res.ok({ deviceDI: di, emails: newEmails }, 'Email removed from mapping');
+    } catch (err) {
+        logger.loggerError(`deleteSpecificEmail error: ${err.message || err}`);
+        return res.fail(err.message || 'deleteSpecificEmail error', 400);
+    }
+}

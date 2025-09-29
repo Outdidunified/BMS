@@ -35,6 +35,9 @@ const Notification = {
     async deleteOne(filter) {
         return await col().deleteOne(filter);
     },
+    async updateOne(filter, update) {
+        return await col().updateOne(filter, { $set: update });
+    },
 };
 
 export default Notification;

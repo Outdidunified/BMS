@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from "recharts";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
 import { Icon } from "@/components/icon";
 import { Title, Text } from "@/ui/typography";
@@ -11,6 +21,12 @@ import { varBounce } from "@/components/animate/variants/bounce";
 import { m } from "motion/react";
 import Character from "@/assets/images/characters/character_4.png";
 import { themeVars } from "@/theme/theme.css";
+import telemetryService, {
+  BatteryCycleMetric,
+  BatteryStateReportCycle,
+  BatteryStateReportResponse,
+} from "@/api/services/telemetryService";
+import * as XLSX from "xlsx";
 
 interface TelemetryData {
   timestamp: string;
@@ -34,11 +50,48 @@ interface TelemetryData {
 
 const API_BASE = "http://192.168.1.17:8070";
 
+function formatDate(value: string | Date | null) {
+  if (!value) return "-";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
+function formatDuration(seconds: number | null | undefined) {
+  if (!seconds || seconds <= 0) return "-";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return [
+    hours ? `${hours} hr` : null,
+    minutes ? `${minutes} min` : null,
+    remainingSeconds ? `${remainingSeconds} sec` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function formatMetric(metric: BatteryCycleMetric | null) {
+  if (!metric) return "-";
+  return `${metric.min.toFixed(2)} / ${metric.max.toFixed(2)} / ${metric.avg.toFixed(2)}`;
+}
+
+function formatMetricValue(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return value.toFixed(2);
+}
+
 export default function DeviceHistoryDetail() {
   const { deviceId } = useParams();
   const [data, setData] = useState<TelemetryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [report, setReport] = useState<BatteryStateReportResponse | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
 
   useEffect(() => {
     const fetchTelemetry = async () => {
@@ -64,6 +117,62 @@ export default function DeviceHistoryDetail() {
 
     fetchTelemetry();
   }, [deviceId]);
+
+  useEffect(() => {
+    const fetchBatteryReport = async () => {
+      if (!deviceId) return;
+      try {
+        setReportLoading(true);
+        setReportError(null);
+        const response = await telemetryService.batteryStateReport({ di: deviceId, page, pageSize });
+        setReport(response);
+      } catch (err) {
+        console.error("Error fetching battery state report:", err);
+        setReportError("Unable to load battery state report");
+      } finally {
+        setReportLoading(false);
+      }
+    };
+
+    fetchBatteryReport();
+  }, [deviceId, page]);
+
+  const combinedChartData = useMemo(() => {
+    if (!data) return [];
+    return data.telemetry.voltages.map((voltage, index) => ({
+      index: index + 1,
+      voltage,
+      temperature: data.telemetry.temperatures[index] || null,
+    }));
+  }, [data]);
+
+  const handleExportToExcel = useCallback(() => {
+    if (!report || !report.sessions.length) return;
+
+    const rows = report.sessions.map((session) => ({
+      "Bank Name": session.bankName,
+      State: session.state,
+      "Amp Hours": Number(session.ampHours.toFixed(3)),
+      "Amp Hour %": Number(session.ampHourPercent.toFixed(2)),
+      "Start": formatDate(session.startTimestamp),
+      "End": formatDate(session.endTimestamp),
+      "Duration": formatDuration(session.durationSeconds),
+      "Ambient Temp Min (°C)": session.ambientTemperature ? Number(session.ambientTemperature.min.toFixed(2)) : null,
+      "Ambient Temp Max (°C)": session.ambientTemperature ? Number(session.ambientTemperature.max.toFixed(2)) : null,
+      "Ambient Temp Avg (°C)": session.ambientTemperature ? Number(session.ambientTemperature.avg.toFixed(2)) : null,
+      "Current Min (A)": session.current ? Number(session.current.min.toFixed(2)) : null,
+      "Current Max (A)": session.current ? Number(session.current.max.toFixed(2)) : null,
+      "Current Avg (A)": session.current ? Number(session.current.avg.toFixed(2)) : null,
+      "Power Avg (W)": session.powerAvg !== null && session.powerAvg !== undefined ? Number(session.powerAvg.toFixed(3)) : null,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Cycles");
+
+    const fileName = `${deviceId || "device"}-battery-cycles.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  }, [report, deviceId]);
 
   if (loading) {
     return (
@@ -123,19 +232,6 @@ export default function DeviceHistoryDetail() {
       </div>
     );
   }
-
-  // Prepare chart data
-  const combinedChartData = data.telemetry.voltages.map((voltage, index) => ({
-    index: index + 1,
-    voltage,
-    temperature: data.telemetry.temperatures[index] || null,
-  }));
-
-  const currentData = [
-    { name: "Charging", value: data.telemetry.currents.charging },
-    { name: "Discharging", value: data.telemetry.currents.discharging },
-    { name: "Load", value: data.telemetry.currents.load },
-  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -251,6 +347,146 @@ export default function DeviceHistoryDetail() {
         </CardContent>
       </Card>
 
+      {/* Battery State Report Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Battery Charge & Discharge Cycles</CardTitle>
+          <Text variant="body2" color="secondary">
+            Bank, energy, duration, ambient temperature, and current metrics derived from persisted cycles.
+          </Text>
+          {report && report.sessions.length ? (
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" variant="outline" onClick={handleExportToExcel}>
+                <Icon icon="lucide:download" className="w-4 h-4 mr-2" />
+                Export to Excel
+              </Button>
+            </div>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {reportLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : reportError ? (
+            <div className="text-red-600 text-sm">{reportError}</div>
+          ) : report && report.sessions.length ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+                  <tr>
+                    <th rowSpan={2} className="px-6 py-3 text-center align-bottom">
+                      Bank Name
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      State
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      AH
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      AH %
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      Start
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      End
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      Duration
+                    </th>
+                    <th colSpan={3} className="px-4 py-2 text-center">
+                      Ambient Temp (°C)
+                    </th>
+                    <th colSpan={3} className="px-4 py-2 text-center">
+                      Current (A)
+                    </th>
+                    <th rowSpan={2} className="px-4 py-3 text-center align-bottom">
+                      Power Avg (W)
+                    </th>
+                  </tr>
+                  <tr>
+                    <th className="px-3 py-2 text-center">Min</th>
+                    <th className="px-3 py-2 text-center">Max</th>
+                    <th className="px-3 py-2 text-center">Avg</th>
+                    <th className="px-3 py-2 text-center">Min</th>
+                    <th className="px-3 py-2 text-center">Max</th>
+                    <th className="px-3 py-2 text-center">Avg</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm text-gray-800">
+                  {report.sessions.map((session: BatteryStateReportCycle, index: number) => (
+                    <tr key={`${session.startTimestamp}-${index}`} className="border-b last:border-0">
+                      <td className="px-4 py-3 font-medium">{session.bankName}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold uppercase ${
+                            session.state === "charging"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {session.state}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">{session.ampHours.toFixed(3)}</td>
+                      <td className="px-4 py-3 text-right">{session.ampHourPercent.toFixed(2)}%</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatDate(session.startTimestamp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatDate(session.endTimestamp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatDuration(session.durationSeconds)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.ambientTemperature.min)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.ambientTemperature.max)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.ambientTemperature.avg)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.current.min)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.current.max)}</td>
+                      <td className="px-3 py-3 text-right">{formatMetricValue(session.current.avg)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {session.powerAvg !== null && session.powerAvg !== undefined
+                          ? session.powerAvg.toFixed(3)
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="flex items-center justify-between mt-4 text-sm">
+                <Text variant="body2" color="secondary">
+                  Page {report.pagination.page} of {report.pagination.pageCount} · Total cycles: {report.pagination.total}
+                </Text>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1 border rounded disabled:opacity-50"
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1 border rounded disabled:opacity-50"
+                    onClick={() =>
+                      setPage((prev) =>
+                        report.pagination.pageCount ? Math.min(report.pagination.pageCount, prev + 1) : prev + 1,
+                      )
+                    }
+                    disabled={report.pagination.pageCount !== 0 && page >= report.pagination.pageCount}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No charge or discharge cycles available yet.</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
