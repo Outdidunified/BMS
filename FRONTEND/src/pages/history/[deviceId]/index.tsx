@@ -251,82 +251,74 @@ export default function DeviceHistoryDetail() {
         </Badge>
       </div>
 
-      {/* Device Info and Electrical Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Device Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Device ID</span>
-              <Icon icon="lucide:monitor" className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-xl font-bold">{data.deviceFull.deviceId}</div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Battery ID</span>
-              <Icon icon="lucide:battery" className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-xl font-bold">{data.deviceFull.batteryId}</div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">MAC Address</span>
-              <Icon icon="lucide:wifi" className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-lg font-bold">{data.deviceFull.macId}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Electrical Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Device Overview Cards */}
+<Card>
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Device Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Device Information Section */}
             <div className="space-y-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600 mb-2">
-                  {data.telemetry.packVoltage.toFixed(2)} V
-                </div>
-                <p className="text-sm text-gray-600">Pack Voltage</p>
-              </div>
-
+              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Device Information</h3>
               <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Icon icon="lucide:zap" className="h-5 w-5 text-green-600" />
-                    <span className="text-sm font-medium">Charging</span>
-                  </div>
-                  <div className="text-xl font-bold text-green-600">
-                    {data.telemetry.currents.charging.toFixed(2)} A
-                  </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">Device ID</span>
+                  <div className="text-lg font-bold text-gray-900">{data.deviceFull.deviceId}</div>
                 </div>
 
-                <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Icon icon="lucide:minus-circle" className="h-5 w-5 text-red-600" />
-                    <span className="text-sm font-medium">Discharging</span>
-                  </div>
-                  <div className="text-xl font-bold text-red-600">
-                    {data.telemetry.currents.discharging.toFixed(2)} A
-                  </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">Battery ID</span>
+                  <div className="text-lg font-bold text-gray-900">{data.deviceFull.batteryId}</div>
                 </div>
 
-                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Icon icon="lucide:bolt" className="h-5 w-5 text-blue-600" />
-                    <span className="text-sm font-medium">Load</span>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">MAC Address</span>
+                  <div className="text-lg font-bold text-gray-900">{data.deviceFull.macId}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Electrical Overview Section */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Electrical Overview</h3>
+              <div className="space-y-6">
+                {/* Pack Voltage */}
+                <div className="text-center p-6 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="text-4xl font-bold text-gray-900 mb-2">
+                    {data.telemetry.packVoltage.toFixed(2)} V
                   </div>
-                  <div className="text-xl font-bold text-blue-600">
-                    {data.telemetry.currents.load.toFixed(2)} A
+                  <p className="text-sm text-gray-700 font-medium">Pack Voltage</p>
+                </div>
+
+                {/* Currents */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm font-medium text-gray-700">Charging</span>
+                    <div className="text-xl font-bold text-gray-900">
+                      {data.telemetry.currents.charging.toFixed(2)} A
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm font-medium text-gray-700">Discharging</span>
+                    <div className="text-xl font-bold text-gray-900">
+                      {data.telemetry.currents.discharging.toFixed(2)} A
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm font-medium text-gray-700">Load</span>
+                    <div className="text-xl font-bold text-gray-900">
+                      {data.telemetry.currents.load.toFixed(2)} A
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
+          </div>
+        </CardContent>
+      </Card>
       {/* Combined Voltage and Temperature Chart */}
       <Card>
         <CardHeader>
