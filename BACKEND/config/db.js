@@ -37,11 +37,19 @@ export async function connectDB() {
             logger.loggerInfo('Created time-series collection battery_data');
         }
 
+        const cycleCollections = await db.listCollections({ name: 'telemetry_cycles' }).toArray();
+        if (cycleCollections.length === 0) {
+            await db.createCollection('telemetry_cycles');
+            logger.loggerInfo('Created collection telemetry_cycles');
+        }
+
         // Ensure indexes for performance & uniqueness
         await db.collection('devices').createIndex({ deviceId: 1 }, { unique: true, sparse: true });
         await db.collection('devices').createIndex({ macId: 1 }, { unique: true, sparse: true });
         await db.collection('devices').createIndex({ status: 1 });
         await db.collection('battery_data').createIndex({ 'deviceFull.deviceId': 1, timestamp: -1 });
+        await db.collection('telemetry_cycles').createIndex({ deviceId: 1, startTimestamp: -1 });
+        await db.collection('telemetry_cycles').createIndex({ deviceId: 1, state: 1 });
     } catch (err) {
         logger.loggerError(`MongoDB connection error: ${err.message || err}`);
         throw err;
@@ -57,7 +65,17 @@ export function collections() {
     const d = getDb();
     return {
         telemetry: d.collection('battery_data'),
+        telemetryCycles: d.collection('telemetry_cycles'),
         devices: d.collection('devices'),
         notifications: d.collection('notifications'),
     };
+}
+
+export async function closeDB() {
+    if (client) {
+        await client.close();
+        client = null;
+        db = null;
+        logger.loggerInfo('MongoDB connection closed');
+    }
 }

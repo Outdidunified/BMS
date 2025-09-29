@@ -1,9 +1,10 @@
 import express from 'express';
-import { latestTelemetry, rangeTelemetry } from '../controllers/telemetry.controller.js';
+import { latestTelemetry, rangeTelemetry, batteryStateReport } from '../controllers/telemetry.controller.js';
 
-const router = express.Router();
+const thz = express.Router();
 
-router.get('/latest', latestTelemetry);
-router.get('/range', rangeTelemetry);
+thz.get('/latest', latestTelemetry);
+thz.get('/range', rangeTelemetry);
+thz.get('/battery-state-report', batteryStateReport);
 
-export default router;
+export default thz;

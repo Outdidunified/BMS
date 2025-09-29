@@ -70,6 +70,7 @@ apiApp.get('/docs', (_req, res) => {
             telemetry: {
                 latest: 'GET /telemetry/latest?di=',
                 range: 'GET /telemetry/range?di=&from=&to=&limit=',
+                batteryStateReport: 'GET /telemetry/battery-state-report?di=&from=&to=&page=&pageSize=',
             },
             ingest: {
                 health: `GET http://host:${INGEST_PORT}/health`,
