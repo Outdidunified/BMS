@@ -24,6 +24,7 @@ export async function createDevice(req, res) {
             deviceId,
             batteryId,
             macId,
+            batteryCapacityAh: typeof b.batteryCapacityAh === 'number' ? b.batteryCapacityAh : undefined,
             apiKey: b.apiKey,
             alerts: b.alerts || {},
             meta: b.meta || {},

@@ -6,6 +6,7 @@ const RATED_CAPACITY_AH = 60;
 const DEFAULT_BANK_NAME = 'IPS BATT BANK';
 const ABNORMAL_TEMP_C = 45;
 const CURRENT_MULTIPLIER_THRESHOLD = 1.25; // > 125% of rated capacity is abnormal
+const MAX_EXPORT_RECORDS = 10000;
 
 function parseDateMaybe(v) {
     if (!v) return null;
@@ -128,6 +129,70 @@ export async function rangeTelemetry(req, res) {
     }
 }
 
+function buildCycleMatchQuery(di, from, to, stateFilter) {
+    const match = { deviceId: di };
+    if (from || to) {
+        match.startTimestamp = {};
+        if (from) match.startTimestamp.$gte = from;
+        if (to) match.startTimestamp.$lte = to;
+    }
+    if (stateFilter) match.state = stateFilter;
+    return match;
+}
+
+async function fetchCycleSummary(collection, match) {
+    const summaryAgg = await collection
+        .aggregate([
+            { $match: match },
+            {
+                $group: {
+                    _id: null,
+                    totalSessions: { $sum: 1 },
+                    totalAmpHours: { $sum: '$ampHours' },
+                    totalChargeAmpHours: {
+                        $sum: {
+                            $cond: [{ $eq: ['$state', 'charging'] }, '$ampHours', 0],
+                        },
+                    },
+                    totalDischargeAmpHours: {
+                        $sum: {
+                            $cond: [{ $eq: ['$state', 'discharging'] }, '$ampHours', 0],
+                        },
+                    },
+                },
+            },
+        ])
+        .toArray();
+
+    const summaryDoc = summaryAgg[0] || null;
+    return {
+        totalSessions: summaryDoc?.totalSessions || 0,
+        totalAmpHours: summaryDoc?.totalAmpHours || 0,
+        totalChargeAmpHours: summaryDoc?.totalChargeAmpHours || 0,
+        totalDischargeAmpHours: summaryDoc?.totalDischargeAmpHours || 0,
+    };
+}
+
+function normalizeCycle(cycle) {
+    return {
+        deviceId: cycle.deviceId,
+        batteryId: cycle.batteryId,
+        macId: cycle.macId,
+        bankName: cycle.bankName || DEFAULT_BANK_NAME,
+        state: cycle.state,
+        startTimestamp: cycle.startTimestamp,
+        endTimestamp: cycle.endTimestamp,
+        durationSeconds: cycle.durationSeconds,
+        ampHours: cycle.ampHours,
+        ampHourPercent: Math.min(100, cycle.ampHourPercent ?? 0),
+        ratedCapacityAh: cycle.ratedCapacityAh ?? RATED_CAPACITY_AH,
+        ambientTemperature: cycle.ambientTemperature || null,
+        current: cycle.current || null,
+        powerAvg: cycle.powerAvg ?? null,
+        sessionCount: cycle.sessionCount ?? null,
+    };
+}
+
 export async function batteryStateReport(req, res) {
     try {
         const di = String(req.query.di || '').trim();
@@ -142,17 +207,10 @@ export async function batteryStateReport(req, res) {
         const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
         const pageSize = Math.min(200, Math.max(1, parseInt(String(req.query.pageSize || '50'), 10)));
 
-        const match = { deviceId: di };
-        if (from || to) {
-            match.startTimestamp = {};
-            if (from) match.startTimestamp.$gte = from;
-            if (to) match.startTimestamp.$lte = to;
-        }
-        if (stateFilter) match.state = stateFilter;
-
         const collection = TelemetryCycle.collection;
+        const match = buildCycleMatchQuery(di, from, to, stateFilter);
 
-        const [total, sessionsRaw] = await Promise.all([
+        const [total, sessionsRaw, summary] = await Promise.all([
             collection.countDocuments(match),
             collection
                 .find(match)
@@ -160,56 +218,10 @@ export async function batteryStateReport(req, res) {
                 .skip((page - 1) * pageSize)
                 .limit(pageSize)
                 .toArray(),
+            fetchCycleSummary(collection, match),
         ]);
 
-        const summaryAgg = await collection
-            .aggregate([
-                { $match: match },
-                {
-                    $group: {
-                        _id: null,
-                        totalSessions: { $sum: 1 },
-                        totalAmpHours: { $sum: '$ampHours' },
-                        totalChargeAmpHours: {
-                            $sum: {
-                                $cond: [{ $eq: ['$state', 'charging'] }, '$ampHours', 0],
-                            },
-                        },
-                        totalDischargeAmpHours: {
-                            $sum: {
-                                $cond: [{ $eq: ['$state', 'discharging'] }, '$ampHours', 0],
-                            },
-                        },
-                    },
-                },
-            ])
-            .toArray();
-
-        const summaryDoc = summaryAgg[0] || null;
-        const summary = {
-            totalSessions: summaryDoc?.totalSessions || 0,
-            totalAmpHours: summaryDoc?.totalAmpHours || 0,
-            totalChargeAmpHours: summaryDoc?.totalChargeAmpHours || 0,
-            totalDischargeAmpHours: summaryDoc?.totalDischargeAmpHours || 0,
-        };
-
-        const sessions = sessionsRaw.map((cycle) => ({
-            deviceId: cycle.deviceId,
-            batteryId: cycle.batteryId,
-            macId: cycle.macId,
-            bankName: cycle.bankName || DEFAULT_BANK_NAME,
-            state: cycle.state,
-            startTimestamp: cycle.startTimestamp,
-            endTimestamp: cycle.endTimestamp,
-            durationSeconds: cycle.durationSeconds,
-            ampHours: cycle.ampHours,
-            ampHourPercent: Math.min(100, cycle.ampHourPercent ?? 0),
-            ratedCapacityAh: cycle.ratedCapacityAh ?? RATED_CAPACITY_AH,
-            ambientTemperature: cycle.ambientTemperature || null,
-            current: cycle.current || null,
-            powerAvg: cycle.powerAvg ?? null,
-            sessionCount: cycle.sessionCount ?? null,
-        }));
+        const sessions = sessionsRaw.map((cycle) => normalizeCycle(cycle));
 
         return res.ok(
             {
@@ -229,5 +241,44 @@ export async function batteryStateReport(req, res) {
     } catch (err) {
         logger.loggerError(`batteryStateReport error: ${err.message || err}`);
         return res.fail('Unable to fetch battery state report. Please try again later.', 500);
+    }
+}
+
+export async function batteryStateExport(req, res) {
+    try {
+        const di = String(req.query.di || '').trim();
+        if (!di) return res.fail("The 'di' query parameter is required.", 400);
+
+        const from = parseDateMaybe(req.query.from);
+        const to = parseDateMaybe(req.query.to);
+        const requestedState = typeof req.query.state === 'string' ? req.query.state.toLowerCase() : null;
+        const allowedStates = new Set(['charging', 'discharging']);
+        const stateFilter = requestedState && allowedStates.has(requestedState) ? requestedState : null;
+
+        const collection = TelemetryCycle.collection;
+        const match = buildCycleMatchQuery(di, from, to, stateFilter);
+
+        const totalRecords = await collection.countDocuments(match);
+        if (totalRecords > MAX_EXPORT_RECORDS) {
+            return res.fail(
+                `Export too large (${totalRecords} records). Please refine filters to less than ${MAX_EXPORT_RECORDS} cycles.`,
+                422,
+            );
+        }
+
+        const [sessionsRaw, summary] = await Promise.all([
+            collection
+                .find(match)
+                .sort({ startTimestamp: -1 })
+                .toArray(),
+            fetchCycleSummary(collection, match),
+        ]);
+
+        const sessions = sessionsRaw.map((cycle) => normalizeCycle(cycle));
+
+        return res.ok({ deviceId: di, ratedCapacityAh: RATED_CAPACITY_AH, summary, sessions }, 'Battery state export ready.');
+    } catch (err) {
+        logger.loggerError(`batteryStateExport error: ${err.message || err}`);
+        return res.fail('Unable to fetch battery state export. Please try again later.', 500);
     }
 }

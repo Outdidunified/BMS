@@ -3,6 +3,7 @@ import Device from '../data/Device.model.js';
 import { handleIncomingFrame, broadcast } from '../Websocket/hub.js';
 import { evaluateAndSendAlerts } from '../utils/alerts.js';
 import logger from '../utils/logger.js';
+import telemetryCycleProcessor from '../services/telemetryCycleProcessor.js';
 
 export async function ingestData(req, res) {
     try {
@@ -14,15 +15,61 @@ export async function ingestData(req, res) {
 
         logger.loggerDebug(`Ingest frame received for deviceId=${deviceId}`);
 
-        // Authorize by deviceId (and allow legacy DI match), ignoring x-api-key
-        const device = await Device.findOne({ $or: [{ deviceId }, { DI: deviceId }] });
-        if (!device) {
-            logger.loggerWarn(`Unknown device attempt for deviceId=${deviceId}`);
-            return res.status(403).json({ error: 'unknown device' });
+        if (!deviceId) {
+            logger.loggerWarn('Ingest frame missing deviceId');
+            return res.fail('missing deviceId', 400);
         }
-        if (device && device.status === false) {
-            logger.loggerWarn(`Inactive device blocked for deviceId=${deviceId}`);
-            return res.fail('inactive device', 403);
+
+        const lookupFilters = [{ deviceId }, { DI: deviceId }];
+        if (macId) lookupFilters.push({ macId });
+        if (batteryId) lookupFilters.push({ batteryId });
+        const lookupQuery = lookupFilters.length > 1 ? { $or: lookupFilters } : lookupFilters[0];
+
+        const now = new Date();
+        let device;
+        let wasInserted = false;
+        try {
+            const upsertResult = await Device.findOneAndUpdate(
+                lookupQuery,
+                {
+                    $set: {
+                        deviceId,
+                        DI: deviceId,
+                        batteryId,
+                        macId,
+                        status: true,
+                        updatedAt: now,
+                    },
+                    $setOnInsert: {
+                        createdAt: now,
+                        connected: false,
+                    },
+                },
+                { upsert: true, new: true, returnDocument: 'after', rawResult: true },
+            );
+
+            device = upsertResult?.value;
+            wasInserted =
+                upsertResult?.lastErrorObject?.upserted != null ||
+                upsertResult?.lastErrorObject?.updatedExisting === false;
+
+            if (!device) {
+                device = await Device.findOne(lookupQuery);
+            }
+
+            if (wasInserted) {
+                logger.loggerInfo(`Auto-registered device ${deviceId} from ingest`);
+            } else {
+                logger.loggerDebug(`Device ${deviceId} matched existing record during ingest`);
+            }
+        } catch (upsertErr) {
+            logger.loggerError(`Device auto-registration failed for ${deviceId}: ${upsertErr?.message || upsertErr}`);
+            return res.fail('device registration failed', 500);
+        }
+
+        if (!device) {
+            logger.loggerError(`Device lookup returned no document for ${deviceId} after upsert`);
+            return res.fail('device registration failed', 500);
         }
 
         const timestamp = frame.time ? new Date(frame.time) : new Date();
@@ -62,6 +109,10 @@ export async function ingestData(req, res) {
 
         await Telemetry.collection.insertOne(doc);
         handleIncomingFrame(doc);
+
+        telemetryCycleProcessor.processDocument(doc).catch((err) => {
+            logger.loggerError(`Telemetry cycle processing failed for device ${deviceId}: ${err?.message || err}`);
+        });
 
         // Update device connected status
         if (!device.connected) {

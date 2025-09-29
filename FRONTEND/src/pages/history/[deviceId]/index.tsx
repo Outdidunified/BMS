@@ -27,6 +27,7 @@ import telemetryService, {
   BatteryStateReportResponse,
 } from "@/api/services/telemetryService";
 import * as XLSX from "xlsx";
+import type { BatteryStateReportParams } from "@/api/services/telemetryService";
 
 interface TelemetryData {
   timestamp: string;
@@ -92,6 +93,32 @@ export default function DeviceHistoryDetail() {
   const [report, setReport] = useState<BatteryStateReportResponse | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 5;
+  const [exportMode, setExportMode] = useState<'all' | 'daterange' | 'charging' | 'discharging'>('all');
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
+  const [isExporting, setIsExporting] = useState(false);
+
+  const loadBatteryReport = useCallback(async () => {
+    if (!deviceId) return;
+    try {
+      setReportLoading(true);
+      setReportError(null);
+      const response = await telemetryService.batteryStateReport({
+        di: deviceId,
+        page,
+        pageSize,
+        from: exportMode === 'daterange' ? dateRange.from : undefined,
+        to: exportMode === 'daterange' ? dateRange.to : undefined,
+        state:
+          exportMode === 'charging' ? 'charging' : exportMode === 'discharging' ? 'discharging' : undefined,
+      });
+      setReport(response);
+    } catch (err) {
+      console.error("Error fetching battery state report:", err);
+      setReportError("Unable to load battery state report");
+    } finally {
+      setReportLoading(false);
+    }
+  }, [deviceId, exportMode, dateRange.from, dateRange.to, page, pageSize]);
 
   useEffect(() => {
     const fetchTelemetry = async () => {
@@ -119,23 +146,8 @@ export default function DeviceHistoryDetail() {
   }, [deviceId]);
 
   useEffect(() => {
-    const fetchBatteryReport = async () => {
-      if (!deviceId) return;
-      try {
-        setReportLoading(true);
-        setReportError(null);
-        const response = await telemetryService.batteryStateReport({ di: deviceId, page, pageSize });
-        setReport(response);
-      } catch (err) {
-        console.error("Error fetching battery state report:", err);
-        setReportError("Unable to load battery state report");
-      } finally {
-        setReportLoading(false);
-      }
-    };
-
-    fetchBatteryReport();
-  }, [deviceId, page]);
+    loadBatteryReport();
+  }, [loadBatteryReport]);
 
   const combinedChartData = useMemo(() => {
     if (!data) return [];
@@ -146,33 +158,63 @@ export default function DeviceHistoryDetail() {
     }));
   }, [data]);
 
-  const handleExportToExcel = useCallback(() => {
-    if (!report || !report.sessions.length) return;
+  const handleExportToExcel = useCallback(async () => {
+    if (!deviceId || isExporting) return;
 
-    const rows = report.sessions.map((session) => ({
-      "Bank Name": session.bankName,
-      State: session.state,
-      "Amp Hours": Number(session.ampHours.toFixed(3)),
-      "Amp Hour %": Number(session.ampHourPercent.toFixed(2)),
-      "Start": formatDate(session.startTimestamp),
-      "End": formatDate(session.endTimestamp),
-      "Duration": formatDuration(session.durationSeconds),
-      "Ambient Temp Min (°C)": session.ambientTemperature ? Number(session.ambientTemperature.min.toFixed(2)) : null,
-      "Ambient Temp Max (°C)": session.ambientTemperature ? Number(session.ambientTemperature.max.toFixed(2)) : null,
-      "Ambient Temp Avg (°C)": session.ambientTemperature ? Number(session.ambientTemperature.avg.toFixed(2)) : null,
-      "Current Min (A)": session.current ? Number(session.current.min.toFixed(2)) : null,
-      "Current Max (A)": session.current ? Number(session.current.max.toFixed(2)) : null,
-      "Current Avg (A)": session.current ? Number(session.current.avg.toFixed(2)) : null,
-      "Power Avg (W)": session.powerAvg !== null && session.powerAvg !== undefined ? Number(session.powerAvg.toFixed(3)) : null,
-    }));
+    try {
+      setIsExporting(true);
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Cycles");
+      const exportParams: BatteryStateReportParams = {
+        di: deviceId,
+        from: exportMode === "daterange" ? dateRange.from : undefined,
+        to: exportMode === "daterange" ? dateRange.to : undefined,
+        state:
+          exportMode === "charging" ? "charging" : exportMode === "discharging" ? "discharging" : undefined,
+      };
 
-    const fileName = `${deviceId || "device"}-battery-cycles.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-  }, [report, deviceId]);
+      const exportResponse = await telemetryService.batteryStateExport(exportParams);
+      if (!exportResponse.sessions.length) {
+        setIsExporting(false);
+        return;
+      }
+
+      const rows = exportResponse.sessions.map((session) => ({
+        "Bank Name": session.bankName,
+        State: session.state,
+        "Amp Hours": Number(session.ampHours.toFixed(3)),
+        "Amp Hour %": Number(session.ampHourPercent.toFixed(2)),
+        "Start": formatDate(session.startTimestamp),
+        "End": formatDate(session.endTimestamp),
+        "Duration": formatDuration(session.durationSeconds),
+        "Ambient Temp Min (°C)": session.ambientTemperature ? Number(session.ambientTemperature.min.toFixed(2)) : null,
+        "Ambient Temp Max (°C)": session.ambientTemperature ? Number(session.ambientTemperature.max.toFixed(2)) : null,
+        "Ambient Temp Avg (°C)": session.ambientTemperature ? Number(session.ambientTemperature.avg.toFixed(2)) : null,
+        "Current Min (A)": session.current ? Number(session.current.min.toFixed(2)) : null,
+        "Current Max (A)": session.current ? Number(session.current.max.toFixed(2)) : null,
+        "Current Avg (A)": session.current ? Number(session.current.avg.toFixed(2)) : null,
+        "Power Avg (W)":
+          session.powerAvg !== null && session.powerAvg !== undefined ? Number(session.powerAvg.toFixed(3)) : null,
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Cycles");
+
+      const rangeLabel =
+        exportMode === "daterange"
+          ? `${dateRange.from || "start"}_${dateRange.to || "end"}`
+          : exportMode === "charging"
+          ? "charging-only"
+          : exportMode === "discharging"
+          ? "discharging-only"
+          : "all-data";
+
+      const fileName = `${deviceId || "device"}-battery-cycles-${rangeLabel}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [deviceId, exportMode, dateRange.from, dateRange.to, isExporting]);
 
   if (loading) {
     return (
@@ -347,11 +389,106 @@ export default function DeviceHistoryDetail() {
             Bank, energy, duration, ambient temperature, and current metrics derived from persisted cycles.
           </Text>
           {report && report.sessions.length ? (
-            <div className="mt-4 flex justify-end">
-              <Button size="sm" variant="outline" onClick={handleExportToExcel}>
-                <Icon icon="lucide:download" className="w-4 h-4 mr-2" />
-                Export to Excel
-              </Button>
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={exportMode === "all" ? "default" : "outline"}
+                    onClick={() => {
+                      setExportMode("all");
+                      setDateRange({});
+                      setPage(1);
+                    }}
+                  >
+                    All Data
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={exportMode === "charging" ? "default" : "outline"}
+                    onClick={() => {
+                      setExportMode("charging");
+                      setDateRange({});
+                      setPage(1);
+                    }}
+                  >
+                    Charging Only
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={exportMode === "discharging" ? "default" : "outline"}
+                    onClick={() => {
+                      setExportMode("discharging");
+                      setDateRange({});
+                      setPage(1);
+                    }}
+                  >
+                    Discharging Only
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={exportMode === "daterange" ? "default" : "outline"}
+                    onClick={() => {
+                      setExportMode("daterange");
+                      setPage(1);
+                    }}
+                  >
+                    Custom Date Range
+                  </Button>
+                  {exportMode !== "all" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setExportMode("all");
+                        setDateRange({});
+                        setPage(1);
+                      }}
+                    >
+                      Clear Filter
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={handleExportToExcel}>
+                    <Icon icon="lucide:download" className="w-4 h-4 mr-2" />
+                    Export to Excel
+                  </Button>
+                </div>
+              </div>
+              {exportMode === "daterange" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase text-muted-foreground">From</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full rounded border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={dateRange.from || ""}
+                      onChange={(event) => {
+                        setDateRange((prev) => ({ ...prev, from: event.target.value || undefined }));
+                        setPage(1);
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase text-muted-foreground">To</label>
+                    <input
+                      type="datetime-local"
+                      className="w-full rounded border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={dateRange.to || ""}
+                      onChange={(event) => {
+                        setDateRange((prev) => ({ ...prev, to: event.target.value || undefined }));
+                        setPage(1);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </CardHeader>

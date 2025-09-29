@@ -1,12 +1,9 @@
-import { connectDB, closeDB } from '../config/db.js';
-import Telemetry from '../data/Telemetry.model.js';
 import TelemetryCycle from '../data/TelemetryCycle.model.js';
 import logger from '../utils/logger.js';
 
 const RATED_CAPACITY_AH = 60;
 const DEFAULT_BANK_NAME = 'IPS BATT BANK';
 const NET_CURRENT_EPSILON = 0.05; // Ignore near-idle noise (<0.05A)
-const BATCH_LIMIT = 5000;
 
 function extractIdentifiers(doc) {
     const deviceId = doc.deviceFull?.deviceId || doc.device?.DI || null;
@@ -120,119 +117,110 @@ async function upsertCycle(cycleDoc) {
         endTimestamp: cycleDoc.endTimestamp,
     };
 
+    const { createdAt, ...fieldsToSet } = cycleDoc;
+    fieldsToSet.updatedAt = new Date();
+
     await TelemetryCycle.collection.updateOne(
         filter,
         {
-            $set: {
-                ...cycleDoc,
-                createdAt: undefined,
-            },
+            $set: fieldsToSet,
             $setOnInsert: {
-                createdAt: cycleDoc.createdAt,
+                createdAt: createdAt ?? new Date(),
             },
         },
         { upsert: true },
     );
 }
 
-async function processDevice(deviceId) {
-    const lastCycle = await TelemetryCycle.collection
-        .find({ deviceId })
-        .sort({ endTimestamp: -1 })
-        .limit(1)
-        .toArray();
-    const lastTimestamp = lastCycle[0]?.endTimestamp || null;
-
-    const match = [];
-    if (deviceId) match.push({ 'deviceFull.deviceId': deviceId });
-    match.push({ 'device.DI': deviceId });
-
-    const query = { $or: match };
-    if (lastTimestamp) {
-        query.timestamp = { $gt: lastTimestamp };
+class TelemetryCycleProcessor {
+    constructor(initialState = {}) {
+        const { preloadState } = initialState;
+        this.cycleStateByDevice = preloadState instanceof Map ? new Map(preloadState) : new Map(); // deviceId -> { currentState, cycleDocs, identifiers }
     }
 
-    const cursor = Telemetry.collection
-        .find(query)
-        .sort({ timestamp: 1 })
-        .limit(BATCH_LIMIT);
+    async processDocument(doc) {
+        const identifiers = extractIdentifiers(doc);
+        if (!identifiers.deviceId) return;
 
-    const cycleState = {
-        currentState: null,
-        cycleDocs: [],
-        identifiers: null,
-    };
-
-    let processedDocs = 0;
-
-    const finalizeCycle = async () => {
-        if (!cycleState.cycleDocs.length) return;
-        const meta = {
-            ...cycleState.identifiers,
-            state: cycleState.currentState,
-        };
-        const cycleDoc = summarizeCycleDocs(cycleState.cycleDocs, meta);
-        await upsertCycle(cycleDoc);
-        cycleState.currentState = null;
-        cycleState.cycleDocs = [];
-        cycleState.identifiers = null;
-    };
-
-    while (await cursor.hasNext()) {
-        const doc = await cursor.next();
-        processedDocs += 1;
         const netCurrent = computeNetCurrent(doc);
         const state = computeState(netCurrent);
+        const stateEntry = this.cycleStateByDevice.get(identifiers.deviceId) || {
+            currentState: null,
+            cycleDocs: [],
+            identifiers: null,
+        };
+
+        const finalizeCycle = async () => {
+            if (!stateEntry.cycleDocs.length) return;
+            const meta = {
+                ...stateEntry.identifiers,
+                state: stateEntry.currentState,
+            };
+            try {
+                const cycleDoc = summarizeCycleDocs(stateEntry.cycleDocs, meta);
+                await upsertCycle(cycleDoc);
+                logger.loggerInfo(`Telemetry cycle persisted for device ${identifiers.deviceId} state=${meta.state}`);
+            } catch (err) {
+                logger.loggerError(`Failed to persist telemetry cycle for device ${identifiers.deviceId}: ${err?.message || err}`);
+            }
+            stateEntry.currentState = null;
+            stateEntry.cycleDocs = [];
+            stateEntry.identifiers = null;
+        };
 
         if (state === 'idle') {
             await finalizeCycle();
-            continue;
+            this.cycleStateByDevice.set(identifiers.deviceId, stateEntry);
+            return;
         }
 
-        const identifiers = extractIdentifiers(doc);
-        if (!identifiers.deviceId) continue;
-
-        const hasExistingCycle = cycleState.currentState && cycleState.currentState === state;
+        const hasExistingCycle = stateEntry.currentState && stateEntry.currentState === state;
         if (!hasExistingCycle) {
             await finalizeCycle();
-            cycleState.currentState = state;
-            cycleState.identifiers = identifiers;
+            stateEntry.currentState = state;
+            stateEntry.identifiers = identifiers;
         }
 
-        if (!cycleState.identifiers) {
-            cycleState.identifiers = identifiers;
+        if (!stateEntry.identifiers) {
+            stateEntry.identifiers = identifiers;
         }
 
-        cycleState.cycleDocs.push({ doc, netCurrent });
+        stateEntry.cycleDocs.push({ doc, netCurrent });
+        this.cycleStateByDevice.set(identifiers.deviceId, stateEntry);
     }
 
-    await finalizeCycle();
-    logger.loggerInfo(`Processed ${processedDocs} telemetry docs for device ${deviceId}`);
-}
-
-async function run() {
-    try {
-        await connectDB();
-        const deviceIds = await Telemetry.collection.distinct('deviceFull.deviceId');
-        const fallbackIds = await Telemetry.collection.distinct('device.DI');
-        const allDeviceIds = new Set();
-        fallbackIds.forEach((id) => id && allDeviceIds.add(id));
-        deviceIds.forEach((id) => id && allDeviceIds.add(id));
-
-        for (const deviceId of allDeviceIds) {
-            logger.loggerInfo(`Computing battery cycles for ${deviceId}`);
-            await processDevice(deviceId);
-        }
-    } catch (err) {
-        logger.loggerError(`Error computing telemetry cycles: ${err.message || err}`);
-    } finally {
-        await closeDB();
+    async flush(deviceId) {
+        if (!deviceId) return;
+        const stateEntry = this.cycleStateByDevice.get(deviceId);
+        if (!stateEntry) return;
+        const finalizeCycle = async () => {
+            if (!stateEntry.cycleDocs.length) return;
+            const meta = {
+                ...stateEntry.identifiers,
+                state: stateEntry.currentState,
+            };
+            try {
+                const cycleDoc = summarizeCycleDocs(stateEntry.cycleDocs, meta);
+                await upsertCycle(cycleDoc);
+                logger.loggerInfo(`Telemetry cycle flushed for device ${deviceId} state=${meta.state}`);
+            } catch (err) {
+                logger.loggerError(`Failed to flush telemetry cycle for device ${deviceId}: ${err?.message || err}`);
+            }
+        };
+        await finalizeCycle();
+        this.cycleStateByDevice.delete(deviceId);
     }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-    run().then(() => {
-        logger.loggerSuccess('Telemetry cycles computation finished');
-        process.exit(0);
-    });
-}
+const telemetryCycleProcessor = new TelemetryCycleProcessor();
+
+export {
+    telemetryCycleProcessor,
+    TelemetryCycleProcessor,
+    computeNetCurrent,
+    computeState,
+    summarizeCycleDocs,
+    upsertCycle,
+};
+
+export default telemetryCycleProcessor;
