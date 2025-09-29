@@ -221,7 +221,7 @@ async function sendFrame(frame) {
     const url = `${INGEST_HOST.replace(/\/$/, '')}:${INGEST_PORT}${INGEST_PATH}`;
     try {
         const headers = {};
-        if (API_KEY) headers['x-api-key'] = API_KEY; // optional
+        headers['x-api-key'] = API_KEY;
         const res = await axios.post(url, frame, { headers });
         if (res.status >= 200 && res.status < 300) {
             loggerSuccess(`Frame sent ok DI=${frame.DI}`);

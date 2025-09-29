@@ -17,6 +17,7 @@ export enum TelemetryApi {
   Latest = "/telemetry/latest",
   Range = "/telemetry/range",
   BatteryStateReport = "/telemetry/battery-state-report",
+  BatteryStateExport = "/telemetry/battery-state-export",
 }
 
 export interface BatteryStateReportParams {
@@ -35,6 +36,9 @@ const range = (di: string, from?: string, to?: string) =>
 
 const batteryStateReport = (params: BatteryStateReportParams) =>
   apiClient.get<BatteryStateReportResponse>({ url: TelemetryApi.BatteryStateReport, params });
+
+const batteryStateExport = (params: BatteryStateReportParams) =>
+  apiClient.get<BatteryStateReportResponse>({ url: TelemetryApi.BatteryStateExport, params });
 
 export interface BatteryCycleMetric {
   min: number;
@@ -82,4 +86,4 @@ export interface BatteryStateReportResponse {
   pagination: BatteryStateReportPagination;
 }
 
-export default { latest, range, batteryStateReport };
+export default { latest, range, batteryStateReport, batteryStateExport };
