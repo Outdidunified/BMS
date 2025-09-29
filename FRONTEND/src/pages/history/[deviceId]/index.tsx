@@ -251,6 +251,7 @@ export default function DeviceHistoryDetail() {
         </Badge>
       </div>
 
+      {/* Device Overview Cards */}
 <Card>
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Device Overview</CardTitle>

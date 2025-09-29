@@ -11,7 +11,7 @@ interface Device {
 }
 
 const API_BASE = "http://192.168.1.17:8070";
-
+// Demo data
 export default function HistoryDevicesTab() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
