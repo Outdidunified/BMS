@@ -20,6 +20,7 @@ export default function DevicesTab() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newDevice, setNewDevice] = useState<Partial<Device>>({});
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDevice, setEditDevice] = useState<Partial<Device>>({});
@@ -227,6 +228,17 @@ const newStatus = !device.status;   try {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="mt-4">
+        <Input
+          type="text"
+          placeholder="Search by Device ID, Battery ID, MAC Address, or Status..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </div>
+
       {/* Add Device Form */}
      {/* Add Device Form */}
 {showAddForm && (
@@ -288,7 +300,12 @@ const newStatus = !device.status;   try {
     </thead>
 
     <tbody>
-      {devices.map((device) => (
+      {devices.filter(device =>
+        device.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        device.batteryId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        device.macId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (device.status ? "active" : "inactive").toLowerCase().includes(searchTerm.toLowerCase())
+      ).map((device) => (
         <tr key={device.deviceId} className="bg-white hover:bg-gray-50 transition-colors">
           {/* Device ID */}
          <td className="py-3 px-4">
