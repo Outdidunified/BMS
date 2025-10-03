@@ -11,6 +11,9 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		{ path: "analytics", element: Component("/pages/analytics") },
 		{ path: "history", element: Component("/pages/history") },
 		{ path: "history/:deviceId", element: Component("/pages/history/[deviceId]") },
+		{ path: "manage-roles", element: Component("/pages/management/manage-roles") },
+		{ path: "manage-users", element: Component("/pages/management/manage-users") },
+		{ path: "profile", element: Component("/pages/management/profile") },
 
 		{
 			path: "management",

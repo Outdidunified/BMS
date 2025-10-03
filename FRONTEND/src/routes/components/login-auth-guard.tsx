@@ -2,10 +2,6 @@ import { useUserToken } from "@/store/userStore";
 import { useCallback, useEffect } from "react";
 import { useRouter } from "../hooks";
 
-// Auth guard that currently allows dashboard to be accessed without login
-// If user is unauthenticated and tries to access protected pages (non-dashboard),
-// you can enhance this to check pathname and redirect accordingly.
-
 type Props = {
   children: React.ReactNode;
 };
@@ -15,8 +11,8 @@ export default function LoginAuthGuard({ children }: Props) {
 
   const check = useCallback(() => {
     if (!accessToken) {
-      // Do not redirect unauthenticated users to login by default
-      // This keeps dashboard accessible as landing page
+      // Redirect unauthenticated users to login page
+      router.replace("/auth/login");
       return;
     }
   }, [router, accessToken]);
@@ -24,6 +20,11 @@ export default function LoginAuthGuard({ children }: Props) {
   useEffect(() => {
     check();
   }, [check]);
+
+  // Only render children if user is authenticated
+  if (!accessToken) {
+    return null;
+  }
 
   return <>{children}</>;
 }
