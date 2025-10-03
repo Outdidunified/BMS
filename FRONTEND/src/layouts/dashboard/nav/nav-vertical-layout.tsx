@@ -107,7 +107,8 @@ export function NavVerticalLayout({ data, className }: Props) {
 					<div className="flex-1 overflow-y-auto">
 						{isMiniLayout ? <NavMini data={data} /> : <NavVertical data={data} />}
 					</div>
-					<div className="mt-6 border-t border-border pt-4">
+					{/* <div className="mt-6 border-t border-border pt-4"> */}
+					 <div className="mb-5 " > 
 						<div
 							role="button"
 							tabIndex={0}
@@ -118,12 +119,10 @@ export function NavVerticalLayout({ data, className }: Props) {
 									handleLogout();
 								}
 							}}
-							className={cn(
-								"flex w-full items-center gap-2 font-semibold text-destructive transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50",
-								{
-									"justify-center": isMiniLayout,
-								},
-							)}
+							 className={cn(
+  "mt-2 pt-2 border-t border-border flex w-full items-center justify-center gap-2 font-semibold text-destructive transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+)}
+
 							aria-label={t("sys.login.logout")}
 						>
 							<Icon icon="lucide:log-out" className="h-4 w-4" />
