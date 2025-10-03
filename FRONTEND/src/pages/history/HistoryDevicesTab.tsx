@@ -19,7 +19,12 @@ export default function HistoryDevicesTab() {
   // Fetch all devices
   const fetchDevices = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`);
+      const token = sessionStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
 
       let devicesData: Device[] = [];
