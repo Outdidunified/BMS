@@ -3,7 +3,7 @@ import type { StorageEnum } from "#/enum";
 export const getItem = <T>(key: StorageEnum): T | null => {
 	let value = null;
 	try {
-		const result = window.localStorage.getItem(key);
+		const result = window.sessionStorage.getItem(key);
 		if (result) {
 			value = JSON.parse(result);
 		}
@@ -14,15 +14,15 @@ export const getItem = <T>(key: StorageEnum): T | null => {
 };
 
 export const getStringItem = (key: StorageEnum): string | null => {
-	return localStorage.getItem(key);
+	return sessionStorage.getItem(key);
 };
 
 export const setItem = <T>(key: StorageEnum, value: T): void => {
-	localStorage.setItem(key, JSON.stringify(value));
+	sessionStorage.setItem(key, JSON.stringify(value));
 };
 export const removeItem = (key: StorageEnum): void => {
-	localStorage.removeItem(key);
+	sessionStorage.removeItem(key);
 };
 export const clearItems = () => {
-	localStorage.clear();
+	sessionStorage.clear();
 };

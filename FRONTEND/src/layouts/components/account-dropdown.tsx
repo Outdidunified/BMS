@@ -17,7 +17,15 @@ export default function AccountDropdown() {
 	const { t } = useTranslation();
 	const logout = () => {
 		try {
+			// Clear Zustand store
 			clearUserInfoAndToken();
+			
+			// Clear all session storage data
+			sessionStorage.removeItem("authToken");
+			sessionStorage.removeItem("authUser");
+			sessionStorage.removeItem("authResponse");
+			
+			// Reset login state
 			backToLogin();
 		} catch (error) {
 			console.log(error);

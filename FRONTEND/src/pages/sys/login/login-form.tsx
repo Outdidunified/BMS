@@ -1,56 +1,103 @@
-import { DB_USER } from "@/_mock/assets_backup";
-import type { SignInReq } from "@/api/services/userService";
-import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
-import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
 import { cn } from "@/utils";
 import { Loader2 } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
+import { useUserActions } from "@/store/userStore";
+
+interface LoginFormValues {
+	email: string;
+	password: string;
+}
+
+const LOGIN_ENDPOINT = "http://192.168.0.12:8070/auth/login";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const { t } = useTranslation();
 	const [loading, setLoading] = useState(false);
-	const [remember, setRemember] = useState(true);
-	const navigatge = useNavigate();
+	const navigate = useNavigate();
+	const { setUserInfo, setUserToken } = useUserActions();
 
-	const { loginState, setLoginState } = useLoginStateContext();
-	const signIn = useSignIn();
+	const { loginState } = useLoginStateContext();
 
-	const form = useForm<SignInReq>({
+	const form = useForm<LoginFormValues>({
 		defaultValues: {
-			username: DB_USER[0].username,
-			password: DB_USER[0].password,
+			email: "",
+			password: "",
 		},
+		mode: "onBlur",
 	});
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
-	const handleFinish = async (values: SignInReq) => {
+	const mutation = useMutation({
+		mutationFn: async (values: LoginFormValues) => {
+			const response = await fetch(LOGIN_ENDPOINT, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(values),
+			});
+
+			const result = await response.json();
+
+			if (!response.ok || !result.success) {
+				throw new Error(result.message || "Failed to login");
+			}
+
+			return result;
+		},
+	});
+
+	const handleFinish = async (values: LoginFormValues) => {
 		setLoading(true);
 		try {
-			await signIn(values);
-			navigatge(GLOBAL_CONFIG.defaultRoute, { replace: true });
-			toast.success(t("sys.login.loginSuccessTitle"), {
+			const result = await mutation.mutateAsync(values);
+			// Success case - store in session storage and navigate to dashboard
+			sessionStorage.setItem("authToken", result.data?.token ?? "");
+			sessionStorage.setItem("authUser", JSON.stringify(result.data?.user ?? {}));
+			sessionStorage.setItem("authResponse", JSON.stringify(result));
+			
+			// Update Zustand store to trigger reactive navigation
+			if (result.data?.user) {
+				setUserInfo(result.data.user);
+			}
+			if (result.data?.token) {
+				setUserToken({ 
+					accessToken: result.data.token,
+					refreshToken: result.data.refreshToken || ""
+				});
+			}
+			
+			// Show success message from backend
+			toast.success(result.message ?? t("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
+			
+			// Navigate to dashboard
+			navigate("/dashboard", { replace: true });
+		} catch (error) {
+			// Error case - show specific message from backend
+			const message = error instanceof Error ? error.message : t("common.errorTip");
+			toast.error(message, { closeButton: true });
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	return (
-		<div className={cn("flex flex-col gap-6", className)}>
+		<div className={cn("w-full", className)}>
 			<Form {...form} {...props}>
-				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
+				<form onSubmit={form.handleSubmit(handleFinish)} className="w-full space-y-6">
 					<div className="flex flex-col items-center gap-2 text-center">
 						<h1 className="text-2xl font-bold">{t("sys.login.signInFormTitle")}</h1>
 						<p className="text-balance text-sm text-muted-foreground">{t("sys.login.signInFormDescription")}</p>
@@ -58,13 +105,19 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 					<FormField
 						control={form.control}
-						name="username"
-						rules={{ required: t("sys.login.accountPlaceholder") }}
+						name="email"
+						rules={{
+							required: t("sys.login.emaildPlaceholder"),
+							pattern: {
+						value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+						message: t("sys.login.emaildPlaceholder"),
+					},
+						}}
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>{t("sys.login.userName")}</FormLabel>
+								<FormLabel>{t("sys.login.email", { defaultValue: "Email" })}</FormLabel>
 								<FormControl>
-									<Input placeholder={DB_USER.map((user) => user.username).join("/")} {...field} />
+									<Input {...field} autoComplete="email" />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
@@ -74,46 +127,29 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					<FormField
 						control={form.control}
 						name="password"
-						rules={{ required: t("sys.login.passwordPlaceholder") }}
+						rules={{
+							required: t("sys.login.passwordPlaceholder"),
+							minLength: { value: 6, message: t("sys.login.passwordPlaceholder") },
+						}}
 						render={({ field }) => (
 							<FormItem>
 								<FormLabel>{t("sys.login.password")}</FormLabel>
 								<FormControl>
-									<Input type="password" placeholder={DB_USER[0].password} {...field} suppressHydrationWarning />
+									<Input type="password" {...field} autoComplete="current-password" />
 								</FormControl>
 								<FormMessage />
 							</FormItem>
 						)}
 					/>
 
-					{/* 记住我/忘记密码 */}
-					<div className="flex flex-row justify-between">
-						<div className="flex items-center space-x-2">
-							<Checkbox
-								id="remember"
-								checked={remember}
-								onCheckedChange={(checked) => setRemember(checked === "indeterminate" ? false : checked)}
-							/>
-							<label
-								htmlFor="remember"
-								className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-							>
-								{t("sys.login.rememberMe")}
-							</label>
-						</div>
-						<Button variant="link" onClick={() => setLoginState(LoginStateEnum.RESET_PASSWORD)} size="sm">
-							{t("sys.login.forgetPassword")}
-						</Button>
-					</div>
-
 					{/* 登录按钮 */}
-					<Button type="submit" className="w-full">
-						{loading && <Loader2 className="animate-spin mr-2" />}
+					<Button type="submit" className="w-full" disabled={loading}>
+						{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 						{t("sys.login.loginButton")}
 					</Button>
 
 					{/* 手机登录/二维码登录 */}
-					<div className="grid gap-4 sm:grid-cols-2">
+					{/* <div className="grid gap-4 sm:grid-cols-2">
 						<Button variant="outline" className="w-full" onClick={() => setLoginState(LoginStateEnum.MOBILE)}>
 							<Icon icon="uil:mobile-android" size={20} />
 							{t("sys.login.mobileSignInFormTitle")}
@@ -122,10 +158,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							<Icon icon="uil:qrcode-scan" size={20} />
 							{t("sys.login.qrSignInFormTitle")}
 						</Button>
-					</div>
+					</div> */}
 
 					{/* 其他登录方式 */}
-					<div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
+					{/* <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
 						<span className="relative z-10 bg-background px-2 text-muted-foreground">{t("sys.login.otherSignIn")}</span>
 					</div>
 					<div className="flex cursor-pointer justify-around text-2xl">
@@ -138,15 +174,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						<Button variant="ghost" size="icon">
 							<Icon icon="ant-design:google-circle-filled" size={24} />
 						</Button>
-					</div>
+					</div> */}
 
 					{/* 注册 */}
-					<div className="text-center text-sm">
+					{/* <div className="text-center text-sm">
 						{t("sys.login.noAccount")}
 						<Button variant="link" className="px-1" onClick={() => setLoginState(LoginStateEnum.REGISTER)}>
 							{t("sys.login.signUpFormTitle")}
 						</Button>
-					</div>
+					</div> */}
 				</form>
 			</Form>
 		</div>
