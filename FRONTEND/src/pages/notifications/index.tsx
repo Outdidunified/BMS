@@ -47,7 +47,12 @@ const [deviceCount, setDeviceCount] = useState(0);
 
   // Load all devices from backend
   useEffect(() => {
-    fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`)
+    const token = sessionStorage.getItem('authToken');
+    fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setDevices(data.data);
@@ -55,8 +60,13 @@ const [deviceCount, setDeviceCount] = useState(0);
   }, []);
 
   const fetchMappings = async () => {
-  const res = await fetch(`${API_BASE_URL}/notifications/mapping/fetch-all`);
-  const data = await res.json();
+    const token = sessionStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE_URL}/notifications/mapping/fetch-all`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const data = await res.json();
   if (data.success && data.data) {
     const mappedEmails: EmailEntry[] = data.data.flatMap((item: any, idx: number) =>
       item.emails.map((email: string) => ({
@@ -104,7 +114,12 @@ const deleteEmail = async (row: EmailEntry) => {
       try {
         const res = await fetch(
           `${API_BASE_URL}/notifications/mapping/delete-email/${row.device}/${row.email}`,
-          { method: "DELETE" }
+          {
+            method: "DELETE",
+            headers: {
+              'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+            },
+          }
         );
         const data = await res.json();
 
@@ -136,6 +151,9 @@ const deleteEmail = async (row: EmailEntry) => {
       try {
         const res = await fetch(`${API_BASE_URL}/notifications/mapping/delete/${deviceId}`, {
           method: "DELETE",
+          headers: {
+            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+          },
         });
         const data = await res.json();
 
@@ -166,7 +184,10 @@ const handleSendNotification = (deviceId: string) => {
       try {
         const res = await fetch(`${API_BASE_URL}/notifications/send`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+          },
           body: JSON.stringify({
             deviceDI: deviceId,
             message: result.value,
@@ -201,9 +222,12 @@ const handleSendNotification = (deviceId: string) => {
           e.id === row.id ? { ...e, email: result.value } : e
         );
 
-        const res = await fetch(`${API_BASE}/notifications/mapping/upsert`, {
+        const res = await fetch(`${API_BASE_URL}/notifications/mapping/upsert`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+          },
           body: JSON.stringify({
             deviceDI: row.device,
             emails: updatedEmails.filter((e) => e.device === row.device).map((e) => e.email),
@@ -262,9 +286,12 @@ const handleSaveMapping = async () => {
   setFormError(""); // clear error before saving
 
   try {
-    const res = await fetch(`${API_BASE}/notifications/mapping/upsert`, {
+    const res = await fetch(`${API_BASE_URL}/notifications/mapping/upsert`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+      },
       body: JSON.stringify({ deviceDI: selectedDevice, emails: emailList }),
     });
     const data = await res.json();
@@ -275,7 +302,11 @@ const handleSaveMapping = async () => {
       setSelectedDevice("");
       setEmailList([""]);
       // Refresh table
-      fetch(`${API_BASE}/notifications/mapping/fetch-all`)
+      fetch(`${API_BASE_URL}/notifications/mapping/fetch-all`, {
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+        },
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.data) {

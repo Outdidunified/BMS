@@ -33,7 +33,7 @@ export const getFrontendNavData = (): NavProps["data"] => {
 		},
 		{
 			title: "Manage Device",
-			path: "/management",
+			path: "/devices",
 			icon: <Icon icon="mdi:cog" size="24" />,
 		},
 		{

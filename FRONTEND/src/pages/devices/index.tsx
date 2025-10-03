@@ -1,340 +1,540 @@
-// import { useState, useEffect, type CSSProperties } from "react";
-// import bannerImage from "@/assets/images/background/banner-1.png";
-// import { Icon } from "@/components/icon";
-// import { Button } from "@/ui/button";
-// import { Input } from "@/ui/input";
-// import { Tabs, TabsContent } from "@/ui/tabs";
-// // import { useUserInfo } from "@/store/userStore";
-// // import { Avatar, AvatarImage } from "@/ui/avatar";
-// // import { Text, Title } from "@/ui/typography";
-// // import { themeVars } from "@/theme/theme.css";
+import { useState, useEffect } from "react";
+import { Icon } from "@/components/icon";
+import { Button } from "@/ui/button";
+import { Input } from "@/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
+import { Badge } from "@/ui/badge";
+import apiClient from "@/api/apiClient";
+import Swal from "sweetalert2";
 
-// interface Device {
-//   id: number;
-//   deviceId: string;
-//   batteryId: string;
-//   macAddress: string;
-//   name: string;
-//   status: "Online" | "Offline";
-//   lastSeen: string;
-// }
+interface Device {
+  _id: string;
+  deviceId: string;
+  batteryId: string;
+  macId: string;
+  apiKey: string | null;
+  alerts: Record<string, any>;
+  meta: Record<string, any>;
+  status: boolean;
+  connected?: boolean;
+  DI?: string;
+  updatedAt?: string;
+}
 
-// function DevicesTab() {
-//   // Load devices from localStorage or default list
-//   const [devices, setDevices] = useState<Device[]>(() => {
-//     const saved = localStorage.getItem("devices");
-//     return saved
-//       ? JSON.parse(saved)
-//       : [
-//           {
-//             id: 1,
-//             deviceId: "DVC-001",
-//             batteryId: "BAT-001",
-//             macAddress: "00:1B:44:11:3A:B7",
-//             name: "MacBook Pro",
-//             status: "Online",
-//             lastSeen: "2025-09-24 10:15 AM",
-//           },
-//           {
-//             id: 2,
-//             deviceId: "DVC-002",
-//             batteryId: "BAT-002",
-//             macAddress: "00:1B:44:11:3A:C8",
-//             name: "iPhone 15",
-//             status: "Offline",
-//             lastSeen: "2025-09-23 09:30 PM",
-//           },
-//         ];
-//   });
+interface DeviceViewData extends Device {
+  // Additional fields that might come from view endpoint
+}
 
-//   // Save devices to localStorage whenever it changes
-//   useEffect(() => {
-//     localStorage.setItem("devices", JSON.stringify(devices));
-//   }, [devices]);
+function DevicesPage() {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newDevice, setNewDevice] = useState({
+    deviceId: "",
+    batteryId: "",
+    macId: "",
+    // batteryCapacityAh: "",
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDevice, setEditDevice] = useState({
+    batteryId: "",
+    macId: "",
+  });
+  const [search, setSearch] = useState("");
+  const [viewingDevice, setViewingDevice] = useState<DeviceViewData | null>(null);
 
-//   const [showAddForm, setShowAddForm] = useState(false);
-//   const [newDevice, setNewDevice] = useState<Partial<Device>>({});
-//   const [editingId, setEditingId] = useState<number | null>(null);
-//   const [editDevice, setEditDevice] = useState<Partial<Device>>({});
-//   const [search, setSearch] = useState("");
+  // Fetch all devices on component mount
+  useEffect(() => {
+    fetchDevices();
+  }, []);
 
-//   const handleAdd = () => {
-//     if (
-//       !newDevice.deviceId ||
-//       !newDevice.batteryId ||
-//       !newDevice.macAddress ||
-//       !newDevice.name ||
-//       !newDevice.status
-//     )
-//       return;
+  const fetchDevices = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get<Device[]>({
+        url: "/devices/fetch-all",
+      });
+      setDevices(response);
+    } catch (error: any) {
+      console.error("Error fetching devices:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//     const deviceToAdd: Device = {
-//       id: Date.now(),
-//       lastSeen: new Date().toLocaleString(),
-//       ...newDevice,
-//     } as Device;
+  const handleAdd = async () => {
+    if (
+      !newDevice.deviceId ||
+      !newDevice.batteryId ||
+      !newDevice.macId
+    ) {
+      Swal.fire({
+        title: "Validation Error",
+        text: "Please fill in all required fields",
+        icon: "error",
+        confirmButtonColor: "#3b82f6",
+      });
+      return;
+    }
 
-//     setDevices([...devices, deviceToAdd]);
+    try {
+      setLoading(true);
+      await apiClient.post({
+        url: "/devices/create",
+        data: {
+          deviceId: newDevice.deviceId,
+          batteryId: newDevice.batteryId,
+          macId: newDevice.macId,
+          // batteryCapacityAh: Number(newDevice.batteryCapacityAh),
+        },
+      });
 
-//     setNewDevice({});
-//     setShowAddForm(false);
-//   };
+      Swal.fire({
+        title: "Success!",
+        text: "Device created successfully",
+        icon: "success",
+        confirmButtonColor: "#3b82f6",
+        timer: 2000,
+      });
 
-//   const handleDelete = (id: number) => {
-//     setDevices(devices.filter((d) => d.id !== id));
-//   };
+      setNewDevice({
+        deviceId: "",
+        batteryId: "",
+        macId: "",
+        // batteryCapacityAh: "",
+      });
+      setShowAddForm(false);
+      fetchDevices();
+    } catch (error: any) {
+      console.error("Error creating device:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//   const handleEdit = (device: Device) => {
-//     setEditingId(device.id);
-//     setEditDevice({ ...device });
-//   };
+  const handleEdit = (device: Device) => {
+    setEditingId(device.deviceId);
+    setEditDevice({
+      batteryId: device.batteryId,
+      macId: device.macId,
+    });
+  };
 
-//   const handleUpdate = (id: number) => {
-//     setDevices(devices.map((d) => (d.id === id ? { ...d, ...editDevice } : d)));
-//     setEditingId(null);
-//   };
+  const handleUpdate = async (deviceId: string) => {
+    if (!editDevice.batteryId || !editDevice.macId) {
+      Swal.fire({
+        title: "Validation Error",
+        text: "Battery ID and MAC ID are required",
+        icon: "error",
+        confirmButtonColor: "#3b82f6",
+      });
+      return;
+    }
 
-//   const filteredDevices = devices.filter(
-//     (d) =>
-//       d.name.toLowerCase().includes(search.toLowerCase()) ||
-//       d.deviceId.toLowerCase().includes(search.toLowerCase()) ||
-//       d.macAddress.toLowerCase().includes(search.toLowerCase())
-//   );
+    try {
+      setLoading(true);
+      await apiClient.put({
+        url: `/devices/update/${deviceId}`,
+        data: {
+          batteryId: editDevice.batteryId,
+          macId: editDevice.macId,
+        },
+      });
 
-//   const onlineCount = devices.filter((d) => d.status === "Online").length;
-//   const offlineCount = devices.filter((d) => d.status === "Offline").length;
+      Swal.fire({
+        title: "Success!",
+        text: "Device updated successfully",
+        icon: "success",
+        confirmButtonColor: "#3b82f6",
+        timer: 2000,
+      });
 
-//   return (
-//     <div className="p-6 border rounded-xl shadow-lg bg-white flex flex-col gap-6">
-//       {/* Heading and Add Button */}
-//       <div className="flex justify-between items-start">
-//         <div className="flex flex-col gap-1">
-//           <h2 className="text-2xl font-bold text-gray-800">Device Overview</h2>
-//           <p className="text-gray-500">
-//             Monitor and manage all your BNS devices from a single interface
-//           </p>
-//         </div>
-//         <Button
-//           className="flex items-center gap-2 text-green-600 hover:text-green-700 bg-transparent"
-//           onClick={() => setShowAddForm(!showAddForm)}
-//         >
-//           <Icon icon="lucide:plus" /> Add Device
-//         </Button>
-//       </div>
+      setEditingId(null);
+      fetchDevices();
+    } catch (error: any) {
+      console.error("Error updating device:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//       {/* Add Device Form */}
-//       {showAddForm && (
-//         <div className="flex flex-wrap gap-2 items-center mt-4 mb-4 p-4 border rounded-lg bg-gray-50">
-//           <Input
-//             placeholder="Device ID"
-//             value={newDevice.deviceId || ""}
-//             onChange={(e) =>
-//               setNewDevice({ ...newDevice, deviceId: e.target.value })
-//             }
-//             className="flex-1 min-w-[120px]"
-//           />
-//           <Input
-//             placeholder="Battery ID"
-//             value={newDevice.batteryId || ""}
-//             onChange={(e) =>
-//               setNewDevice({ ...newDevice, batteryId: e.target.value })
-//             }
-//             className="flex-1 min-w-[120px]"
-//           />
-//           <Input
-//             placeholder="MAC Address"
-//             value={newDevice.macAddress || ""}
-//             onChange={(e) =>
-//               setNewDevice({ ...newDevice, macAddress: e.target.value })
-//             }
-//             className="flex-1 min-w-[150px]"
-//           />
-//           <Input
-//             placeholder="Device Name"
-//             value={newDevice.name || ""}
-//             onChange={(e) =>
-//               setNewDevice({ ...newDevice, name: e.target.value })
-//             }
-//             className="flex-1 min-w-[150px]"
-//           />
-//           <Input
-//             placeholder="Status (Online/Offline)"
-//             value={newDevice.status || ""}
-//             onChange={(e) =>
-//               setNewDevice({
-//                 ...newDevice,
-//                 status: e.target.value as "Online" | "Offline",
-//               })
-//             }
-//             className="flex-1 min-w-[120px]"
-//           />
-//           <Button
-//             className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2"
-//             onClick={handleAdd}
-//           >
-//             <Icon icon="lucide:check" /> Save
-//           </Button>
-//         </div>
-//       )}
+  const handleViewDevice = async (deviceId: string) => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get<DeviceViewData>({
+        url: `/devices/${deviceId}`,
+      });
+      setViewingDevice(response);
 
-//       {/* Search and Status */}
-//       <div className="flex justify-between items-center mt-2">
-//         <div className="relative flex-1">
-//           <Input
-//             placeholder="Search devices..."
-//             value={search}
-//             onChange={(e) => setSearch(e.target.value)}
-//             className="pl-10"
-//           />
-//           <Icon
-//             icon="lucide:search"
-//             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-//           />
-//         </div>
-//         <div className="flex gap-4 ml-4">
-//           <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">
-//             Online: {onlineCount}
-//           </div>
-//           <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full font-medium">
-//             Offline: {offlineCount}
-//           </div>
-//         </div>
-//       </div>
+      Swal.fire({
+        title: "Device Details",
+        html: `
+          <div style="text-align: left; padding: 10px;">
+            <p><strong>Device ID:</strong> ${response.deviceId}</p>
+            <p><strong>Battery ID:</strong> ${response.batteryId}</p>
+            <p><strong>MAC ID:</strong> ${response.macId}</p>
+            <p><strong>Status:</strong> ${response.status ? '<span style="color: green;">Active</span>' : '<span style="color: red;">Inactive</span>'}</p>
+            <p><strong>Connected:</strong> ${response.connected ? '<span style="color: green;">Yes</span>' : '<span style="color: gray;">No</span>'}</p>
+            ${response.updatedAt ? `<p><strong>Last Updated:</strong> ${new Date(response.updatedAt).toLocaleString()}</p>` : ''}
+          </div>
+        `,
+        icon: "info",
+        confirmButtonColor: "#3b82f6",
+        width: 600,
+      });
+    } catch (error: any) {
+      console.error("Error viewing device:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//       {/* Devices Table */}
-//       <div className="overflow-x-auto mt-4">
-//         <table className="min-w-full border-collapse">
-//           <thead className="bg-gray-100 text-gray-700">
-//             <tr>
-//               <th className="py-3 px-4 text-left font-semibold">Device ID</th>
-//               <th className="py-3 px-4 text-left font-semibold">Battery ID</th>
-//               <th className="py-3 px-4 text-left font-semibold">MAC Address</th>
-//               <th className="py-3 px-4 text-left font-semibold">Name</th>
-//               <th className="py-3 px-4 text-left font-semibold">Status</th>
-//               <th className="py-3 px-4 text-left font-semibold">Last Seen</th>
-//               <th className="py-3 px-4 text-center font-semibold">Actions</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredDevices.map((device) => (
-//               <tr
-//                 key={device.id}
-//                 className="bg-white hover:bg-gray-50 transition-colors"
-//               >
-//                 <td className="py-3 px-4">{device.deviceId}</td>
-//                 <td className="py-3 px-4">{device.batteryId}</td>
-//                 <td className="py-3 px-4">{device.macAddress}</td>
-//                 <td className="py-3 px-4">
-//                   {editingId === device.id ? (
-//                     <Input
-//                       value={editDevice.name}
-//                       onChange={(e) =>
-//                         setEditDevice({ ...editDevice, name: e.target.value })
-//                       }
-//                     />
-//                   ) : (
-//                     device.name
-//                   )}
-//                 </td>
-//                 <td className="py-3 px-4">
-//                   {editingId === device.id ? (
-//                     <Input
-//                       value={editDevice.status}
-//                       onChange={(e) =>
-//                         setEditDevice({
-//                           ...editDevice,
-//                           status: e.target.value as "Online" | "Offline",
-//                         })
-//                       }
-//                     />
-//                   ) : (
-//                     <span
-//                       className={`px-2 py-1 rounded-full font-medium ${
-//                         device.status === "Online"
-//                           ? "bg-green-100 text-green-800"
-//                           : "bg-red-100 text-red-800"
-//                       }`}
-//                     >
-//                       {device.status}
-//                     </span>
-//                   )}
-//                 </td>
-//                 <td className="py-3 px-4">{device.lastSeen}</td>
-//                 <td className="py-3 px-4 text-center flex justify-center gap-2">
-//                   {editingId === device.id ? (
-//                     <Button
-//                       className="bg-green-500 hover:bg-green-600 text-white"
-//                       onClick={() => handleUpdate(device.id)}
-//                     >
-//                       <Icon icon="lucide:check" />
-//                     </Button>
-//                   ) : (
-//                     <>
-//                       <Button
-//                         size="icon"
-//                         variant="outline"
-//                         onClick={() => handleEdit(device)}
-//                       >
-//                         <Icon icon="lucide:edit" />
-//                       </Button>
-//                       <Button
-//                         size="icon"
-//                         variant="destructive"
-//                         onClick={() => handleDelete(device.id)}
-//                       >
-//                         <Icon icon="lucide:trash" />
-//                       </Button>
-//                     </>
-//                   )}
-//                 </td>
-//               </tr>
-//             ))}
-//             {filteredDevices.length === 0 && (
-//               <tr>
-//                 <td
-//                   colSpan={7}
-//                   className="py-4 px-4 text-center text-gray-400"
-//                 >
-//                   No devices found.
-//                 </td>
-//               </tr>
-//             )}
-//           </tbody>
-//         </table>
-//       </div>
-//     </div>
-//   );
-// }
+  const handleToggleStatus = async (deviceId: string, currentStatus: boolean) => {
+    const action = currentStatus ? "deactivate" : "activate";
+    
+    const result = await Swal.fire({
+      title: `${action.charAt(0).toUpperCase() + action.slice(1)} Device?`,
+      text: `Are you sure you want to ${action} this device?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#3b82f6",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: `Yes, ${action}!`,
+      cancelButtonText: "Cancel",
+    });
 
-// function UserProfile() {
-//   // const { avatar, username } = useUserInfo();
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        await apiClient.patch({
+          url: `/devices/${deviceId}/status`,
+          data: {
+            status: !currentStatus,
+          },
+        });
 
-//   const bgStyle: CSSProperties = {
-//     position: "absolute",
-//     inset: 0,
-//     background: `url(${bannerImage})`,
-//     backgroundSize: "cover",
-//     backgroundPosition: "50%",
-//     backgroundRepeat: "no-repeat",
-//   };
+        Swal.fire({
+          title: "Success!",
+          text: `Device ${action}d successfully`,
+          icon: "success",
+          confirmButtonColor: "#3b82f6",
+          timer: 2000,
+        });
 
-//   const tabs = [
-//     {
-//       icon: <Icon icon="lucide:monitor" size={24} className="mr-2" />,
-//       title: "Devices",
-//       content: <DevicesTab />,
-//     },
-//   ];
+        fetchDevices();
+      } catch (error: any) {
+        console.error("Error toggling device status:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
-//   return (
-//     <Tabs defaultValue={tabs[0].title} className="w-full">
-//       {tabs.map((tab) => (
-//         <TabsContent key={tab.title} value={tab.title}>
-//           {tab.content}
-//         </TabsContent>
-//       ))}
-//     </Tabs>
-//   );
-// }
+  const filteredDevices = devices.filter(
+    (d) =>
+      d.deviceId.toLowerCase().includes(search.toLowerCase()) ||
+      d.batteryId.toLowerCase().includes(search.toLowerCase()) ||
+      d.macId.toLowerCase().includes(search.toLowerCase())
+  );
 
-// export default UserProfile;
+  const activeCount = devices.filter((d) => d.status === true).length;
+  const inactiveCount = devices.filter((d) => d.status === false).length;
+  const connectedCount = devices.filter((d) => d.connected === true).length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl font-bold">Device Management</CardTitle>
+            <CardDescription>
+              Monitor and manage all your BMS devices from a single interface
+            </CardDescription>
+          </div>
+          <Button
+            className="flex items-center gap-2"
+            onClick={() => setShowAddForm(!showAddForm)}
+            disabled={loading}
+          >
+            <Icon icon="lucide:plus" size={18} />
+            Add Device
+          </Button>
+        </CardHeader>
+      </Card>
+
+      {/* Add Device Form */}
+      {showAddForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add New Device</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Input
+                placeholder="Device ID"
+                value={newDevice.deviceId}
+                onChange={(e) =>
+                  setNewDevice({ ...newDevice, deviceId: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Battery ID"
+                value={newDevice.batteryId}
+                onChange={(e) =>
+                  setNewDevice({ ...newDevice, batteryId: e.target.value })
+                }
+              />
+              <Input
+                placeholder="MAC ID (e.g., AA:BB:CC:DD:EE:FF)"
+                value={newDevice.macId}
+                onChange={(e) =>
+                  setNewDevice({ ...newDevice, macId: e.target.value })
+                }
+              />
+              {/* <Input
+                placeholder="Battery Capacity (Ah)"
+                type="number"
+                value={newDevice.batteryCapacityAh}
+                onChange={(e) =>
+                  setNewDevice({ ...newDevice, batteryCapacityAh: e.target.value })
+                }
+              /> */}
+              <div className="flex gap-2 md:col-span-2 lg:col-span-2">
+                <Button
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white flex items-center gap-2"
+                  onClick={handleAdd}
+                  disabled={loading}
+                >
+                  <Icon icon="lucide:check" size={18} />
+                  {loading ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewDevice({
+                      deviceId: "",
+                      batteryId: "",
+                      macId: "",
+                    });
+                  }}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats and Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="relative flex-1 w-full">
+              <Icon
+                icon="lucide:search"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                size={18}
+              />
+              <Input
+                placeholder="Search devices by Device ID, Battery ID, or MAC ID..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-4 flex-wrap">
+              <Badge variant="default" className="px-4 py-2 bg-green-100 text-green-800 hover:bg-green-100">
+                <Icon icon="mdi:check-circle" className="mr-1" size={16} />
+                Active: {activeCount}
+              </Badge>
+              <Badge variant="default" className="px-4 py-2 bg-red-100 text-red-800 hover:bg-red-100">
+                <Icon icon="mdi:close-circle" className="mr-1" size={16} />
+                Inactive: {inactiveCount}
+              </Badge>
+              <Badge variant="default" className="px-4 py-2 bg-blue-100 text-blue-800 hover:bg-blue-100">
+                <Icon icon="mdi:wifi" className="mr-1" size={16} />
+                Connected: {connectedCount}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Devices Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {loading && devices.length === 0 ? (
+            <div className="flex justify-center items-center py-12">
+              <Icon icon="lucide:loader-2" size={48} className="animate-spin text-blue-500" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th className="py-3 px-4 text-left font-semibold">Device ID</th>
+                    <th className="py-3 px-4 text-left font-semibold">Battery ID</th>
+                    <th className="py-3 px-4 text-left font-semibold">MAC ID</th>
+                    <th className="py-3 px-4 text-left font-semibold">Status</th>
+                    <th className="py-3 px-4 text-left font-semibold">Connected</th>
+                    <th className="py-3 px-4 text-left font-semibold">Last Updated</th>
+                    <th className="py-3 px-4 text-center font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDevices.map((device) => (
+                    <tr
+                      key={device._id}
+                      className="border-b hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <td className="py-3 px-4 font-medium">{device.deviceId}</td>
+                      <td className="py-3 px-4">
+                        {editingId === device.deviceId ? (
+                          <Input
+                            value={editDevice.batteryId}
+                            onChange={(e) =>
+                              setEditDevice({ ...editDevice, batteryId: e.target.value })
+                            }
+                            className="min-w-[150px]"
+                          />
+                        ) : (
+                          device.batteryId
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-sm">
+                        {editingId === device.deviceId ? (
+                          <Input
+                            value={editDevice.macId}
+                            onChange={(e) =>
+                              setEditDevice({ ...editDevice, macId: e.target.value })
+                            }
+                            className="min-w-[180px]"
+                          />
+                        ) : (
+                          device.macId
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant={device.status ? "default" : "destructive"}
+                          className={
+                            device.status
+                              ? "bg-green-100 text-green-800 hover:bg-green-100"
+                              : "bg-red-100 text-red-800 hover:bg-red-100"
+                          }
+                        >
+                          {device.status ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant="outline"
+                          className={
+                            device.connected
+                              ? "border-green-500 text-green-700"
+                              : "border-gray-400 text-gray-600"
+                          }
+                        >
+                          {device.connected ? "Online" : "Offline"}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                        {device.updatedAt
+                          ? new Date(device.updatedAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-center gap-2">
+                          {editingId === device.deviceId ? (
+                            <>
+                              <Button
+                                size="icon"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                                onClick={() => handleUpdate(device.deviceId)}
+                                disabled={loading}
+                                title="Save"
+                              >
+                                <Icon icon="lucide:check" size={18} />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => setEditingId(null)}
+                                disabled={loading}
+                                title="Cancel"
+                              >
+                                <Icon icon="lucide:x" size={18} />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => handleViewDevice(device.deviceId)}
+                                disabled={loading}
+                                title="View Details"
+                              >
+                                <Icon icon="lucide:eye" size={18} />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => handleEdit(device)}
+                                disabled={loading}
+                                title="Edit"
+                              >
+                                <Icon icon="lucide:edit" size={18} />
+                              </Button>
+                              <Button
+  size="icon"
+  variant="outline"
+  className="relative w-12 h-6 rounded-full border-1 border-gray-400 transition-colors data-[active=true]:border-green-500"
+  onClick={() => handleToggleStatus(device.deviceId, device.status)}
+  disabled={loading}
+  title={device.status ? "Deactivate" : "Activate"}
+  data-active={device.status}
+>
+  <span
+    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full shadow-md transition-transform ${
+      device.status
+        ? "translate-x-6 bg-green-400"
+        : "translate-x-0 bg-gray-400"
+    }`}
+  />
+</Button>
+
+
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredDevices.length === 0 && !loading && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="py-8 px-4 text-center text-gray-400"
+                      >
+                        <Icon icon="lucide:inbox" size={48} className="mx-auto mb-2 opacity-50" />
+                        <p>No devices found.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default DevicesPage;
