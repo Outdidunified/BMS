@@ -4,9 +4,10 @@ import { useUserPermissions } from "@/store/userStore";
 import { checkAny } from "@/utils";
 import { useMemo } from "react";
 import { backendNavData } from "./nav-data-backend";
-import { frontendNavData } from "./nav-data-frontend";
+import { getFrontendNavData } from "./nav-data-frontend";
 
-const navData = GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : frontendNavData;
+const getNavData = () => GLOBAL_CONFIG.routerMode === "backend" ? backendNavData : getFrontendNavData();
+const navData = getNavData();
 
 /**
  * 递归处理导航数据，过滤掉没有权限的项目
@@ -41,7 +42,8 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]) => {
  * @returns 过滤后的导航数据
  */
 const filterNavData = (permissions: string[]) => {
-	return navData
+	const currentNavData = getNavData(); // Get fresh nav data each time
+	return currentNavData
 		.map((group) => {
 			// 过滤组内的项目
 			const filteredItems = filterItems(group.items, permissions);

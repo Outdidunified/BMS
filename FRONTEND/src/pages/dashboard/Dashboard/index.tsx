@@ -7,7 +7,7 @@ import { Progress } from "@/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Text, Title } from "@/ui/typography";
 import { cn } from "@/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ---------------------- 数据区 ----------------------
 const timeOptions = [
@@ -182,6 +182,19 @@ function Trend({ value }: { value: number }) {
 
 export default function Analysis() {
 	const [timeType, setTimeType] = useState<"day" | "week" | "month">("day");
+
+	useEffect(() => {
+		const storedToken = sessionStorage.getItem("authToken");
+		const storedUser = sessionStorage.getItem("authUser");
+		const storedResponse = sessionStorage.getItem("authResponse");
+		// Log stored session data for debugging purposes
+		// eslint-disable-next-line no-console
+		console.log("Session storage snapshot:", {
+			storedToken,
+			storedUser,
+			storedResponse,
+		});
+	}, []);
 	const webAnalytic = dashboardData.webAnalytic[timeType];
 	const visitor = dashboardData.visitor[timeType];
 	const conversionRate = dashboardData.conversionRate[timeType];

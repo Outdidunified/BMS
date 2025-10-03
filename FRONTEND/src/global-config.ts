@@ -33,3 +33,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	apiBaseUrl: import.meta.env.VITE_APP_API_BASE_URL || "/api",
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
 };
+
+export const API_BASE_URL = GLOBAL_CONFIG.apiBaseUrl.replace(/\/$/, "");

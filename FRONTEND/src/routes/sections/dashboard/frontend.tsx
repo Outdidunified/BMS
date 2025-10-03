@@ -13,6 +13,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		{ path: "history/:deviceId", element: Component("/pages/history/[deviceId]") },
 		{ path: "manage-roles", element: Component("/pages/management/manage-roles") },
 		{ path: "manage-users", element: Component("/pages/management/manage-users") },
+		{ path: "manage-station-master", element: Component("/pages/management/manage-station-master") },
 		{ path: "profile", element: Component("/pages/management/profile") },
 
 		{
