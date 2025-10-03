@@ -125,7 +125,12 @@ export default function DeviceHistoryDetail() {
 
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE_URL}/telemetry/latest?di=${deviceId}`);
+        const token = sessionStorage.getItem('authToken');
+        const res = await fetch(`${API_BASE_URL}/telemetry/latest?di=${deviceId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
         const result = await res.json();
 
         if (result.success && result.data) {
