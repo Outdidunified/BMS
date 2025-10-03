@@ -7,12 +7,14 @@
     "scripts": {
         "start": "node app.js",
         "seed:devices": "node scripts/seedDevices.js",
-        "seed:battery-demo": "node scripts/seedBatteryStateDemo.js"
+        "seed:battery-demo": "node scripts/seedBatteryStateDemo.js",
+        "seed:initial-user": "node scripts/seedInitialUser.js"
     },
     "dependencies": {
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
+        "jsonwebtoken": "^9.0.2",
         "mongodb": "^6.8.0",
         "morgan": "^1.10.0",
         "nodemailer": "^6.9.14",

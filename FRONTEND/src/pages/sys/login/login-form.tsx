@@ -12,6 +12,8 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 import { useUserActions } from "@/store/userStore";
+import { Eye, EyeOff } from "lucide-react";
+
 
 interface LoginFormValues {
 	email: string;
@@ -93,9 +95,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			setLoading(false);
 		}
 	};
+	const [showPassword, setShowPassword] = useState(false);
+
 
 	return (
-		<div className={cn("w-full", className)}>
+		<div>
+  <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
 			<Form {...form} {...props}>
 				<form onSubmit={form.handleSubmit(handleFinish)} className="w-full space-y-6">
 					<div className="flex flex-col items-center gap-2 text-center">
@@ -125,22 +130,41 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					/>
 
 					<FormField
-						control={form.control}
-						name="password"
-						rules={{
-							required: t("sys.login.passwordPlaceholder"),
-							minLength: { value: 6, message: t("sys.login.passwordPlaceholder") },
-						}}
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{t("sys.login.password")}</FormLabel>
-								<FormControl>
-									<Input type="password" {...field} autoComplete="current-password" />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+  control={form.control}
+  name="password"
+  rules={{
+    required: t("sys.login.passwordPlaceholder"),
+    minLength: { value: 6, message: t("sys.login.passwordPlaceholder") },
+  }}
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>{t("sys.login.password")}</FormLabel>
+      <FormControl>
+        <div className="relative">
+          <Input
+            type={showPassword ? "text" : "password"}
+            {...field}
+            autoComplete="current-password"
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+          >
+            {showPassword ? (
+              <EyeOff className="h-5 w-5" />
+            ) : (
+              <Eye className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+      </FormControl>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
+
 
 					{/* 登录按钮 */}
 					<Button type="submit" className="w-full" disabled={loading}>
@@ -185,6 +209,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					</div> */}
 				</form>
 			</Form>
+			</div>
 		</div>
 	);
 }
