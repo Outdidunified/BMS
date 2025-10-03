@@ -4,10 +4,11 @@ import userStore from "@/store/userStore";
 import { toast } from "sonner";
 import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
+import { API_BASE_URL } from "@/global-config";
 
 // Centralized Axios instance for live backend
 export const axiosInstance = axios.create({
-	baseURL: "http://192.168.1.17:8070",
+	baseURL: API_BASE_URL,
 	timeout: 50000,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });

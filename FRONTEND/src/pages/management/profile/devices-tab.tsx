@@ -4,6 +4,8 @@ import { Button } from "@/ui/button";
 import { Icon } from "@/components/icon";
 import Swal from "sweetalert2";
 import { Switch } from "@/ui/switch"; 
+import { API_BASE_URL } from "@/global-config";
+import { useRouter } from "@/routes/hooks/use-router";
 
 interface Device {
   deviceId: string;
@@ -13,9 +15,8 @@ interface Device {
   // status?: "Active" | "Inactive";
 }
 
-const API_BASE = "http://192.168.1.17:8070";
-
 export default function DevicesTab() {
+  const { push } = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newDevice, setNewDevice] = useState<Partial<Device>>({});
@@ -32,16 +33,36 @@ export default function DevicesTab() {
   // Fetch all devices
  const fetchDevices = async () => {
   try {
-    const res = await fetch(`${API_BASE}/devices/fetch-all?includeInactive=true`);
+    const token = localStorage.getItem("authToken");
+    const res = await fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
     const data = await res.json();
 
-    let devicesData: Device[] = [];
+    if (!res.ok || data?.success === false) {
+      const errorMessage = data?.message ?? "Failed to fetch devices.";
+      await Swal.fire({
+        title: "Error",
+        text: errorMessage,
+        icon: "error",
+        confirmButtonText: "OK",
+      });
 
-    if (Array.isArray(data)) {
-      devicesData = data;
-    } else if (Array.isArray(data.data)) {
-      devicesData = data.data;
+      if (res.status === 401 && errorMessage.includes("Access token required")) {
+        push("/auth/login");
+      }
+
+      setDevices([]);
+      return;
     }
+
+    const devicesData: Device[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.data)
+        ? data.data
+        : [];
 
     // ✅ Normalize boolean -> "Active" | "Inactive"
    setDevices(
@@ -71,7 +92,7 @@ export default function DevicesTab() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`${API_BASE}/devices/create`, {
+      const res = await fetch(`${API_BASE_URL}/devices/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newDevice),
@@ -103,7 +124,7 @@ export default function DevicesTab() {
   // View device
   const handleView = async (deviceId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/devices/${deviceId}`, { method: "GET" });
+      const res = await fetch(`${API_BASE_URL}/devices/${deviceId}`, { method: "GET" });
       const data = await res.json();
       if (data && data.data) {
         setViewDevice(data.data);
@@ -134,7 +155,7 @@ export default function DevicesTab() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`${API_BASE}/devices/update/${deviceId}`, {
+      const res = await fetch(`${API_BASE_URL}/devices/update/${deviceId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editDevice),
