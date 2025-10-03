@@ -5,8 +5,7 @@ import { Label } from "@/ui/label";
 import { Card } from "@/ui/card";
 import { Trash2, Plus, Send, Edit2  } from "lucide-react";
 import Swal from "sweetalert2";
-
-const API_BASE = "http://192.168.1.17:8070";
+import { API_BASE_URL } from "@/global-config";
 
 interface EmailEntry {
   id: number;
@@ -48,7 +47,7 @@ const [deviceCount, setDeviceCount] = useState(0);
 
   // Load all devices from backend
   useEffect(() => {
-    fetch(`${API_BASE}/devices/fetch-all?includeInactive=true`)
+    fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setDevices(data.data);
@@ -56,7 +55,7 @@ const [deviceCount, setDeviceCount] = useState(0);
   }, []);
 
   const fetchMappings = async () => {
-  const res = await fetch(`${API_BASE}/notifications/mapping/fetch-all`);
+  const res = await fetch(`${API_BASE_URL}/notifications/mapping/fetch-all`);
   const data = await res.json();
   if (data.success && data.data) {
     const mappedEmails: EmailEntry[] = data.data.flatMap((item: any, idx: number) =>
@@ -104,7 +103,7 @@ const deleteEmail = async (row: EmailEntry) => {
     if (result.isConfirmed) {
       try {
         const res = await fetch(
-          `${API_BASE}/notifications/mapping/delete-email/${row.device}/${row.email}`,
+          `${API_BASE_URL}/notifications/mapping/delete-email/${row.device}/${row.email}`,
           { method: "DELETE" }
         );
         const data = await res.json();
@@ -135,7 +134,7 @@ const deleteEmail = async (row: EmailEntry) => {
   }).then(async (result) => {
     if (result.isConfirmed) {
       try {
-        const res = await fetch(`${API_BASE}/notifications/mapping/delete/${deviceId}`, {
+        const res = await fetch(`${API_BASE_URL}/notifications/mapping/delete/${deviceId}`, {
           method: "DELETE",
         });
         const data = await res.json();
@@ -165,7 +164,7 @@ const handleSendNotification = (deviceId: string) => {
   }).then(async (result) => {
     if (result.isConfirmed && result.value) {
       try {
-        const res = await fetch(`${API_BASE}/notifications/send`, {
+        const res = await fetch(`${API_BASE_URL}/notifications/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

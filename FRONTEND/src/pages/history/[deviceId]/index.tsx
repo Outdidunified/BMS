@@ -28,6 +28,7 @@ import telemetryService, {
 } from "@/api/services/telemetryService";
 import * as XLSX from "xlsx";
 import type { BatteryStateReportParams } from "@/api/services/telemetryService";
+import { API_BASE_URL } from "@/global-config";
 
 interface TelemetryData {
   timestamp: string;
@@ -48,8 +49,6 @@ interface TelemetryData {
   };
   _id: string;
 }
-
-const API_BASE = "http://192.168.1.17:8070";
 
 function formatDate(value: string | Date | null) {
   if (!value) return "-";
@@ -126,7 +125,7 @@ export default function DeviceHistoryDetail() {
 
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/telemetry/latest?di=${deviceId}`);
+        const res = await fetch(`${API_BASE_URL}/telemetry/latest?di=${deviceId}`);
         const result = await res.json();
 
         if (result.success && result.data) {

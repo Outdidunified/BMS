@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/ui/button";
 import { Icon } from "@/components/icon";
 import { useRouter } from "@/routes/hooks/use-router";
+import { API_BASE_URL } from "@/global-config";
 
 interface Device {
   deviceId: string;
@@ -9,8 +10,6 @@ interface Device {
   macId: string;
   status: boolean;
 }
-
-const API_BASE = "http://192.168.1.17:8070";
 // Demo data
 export default function HistoryDevicesTab() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -20,7 +19,7 @@ export default function HistoryDevicesTab() {
   // Fetch all devices
   const fetchDevices = async () => {
     try {
-      const res = await fetch(`${API_BASE}/devices/fetch-all?includeInactive=true`);
+      const res = await fetch(`${API_BASE_URL}/devices/fetch-all?includeInactive=true`);
       const data = await res.json();
 
       let devicesData: Device[] = [];

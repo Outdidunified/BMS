@@ -1,4 +1,4 @@
-import { GLOBAL_CONFIG } from "@/global-config";
+import { API_BASE_URL, GLOBAL_CONFIG } from "@/global-config";
 import { Button } from "@/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
@@ -18,7 +18,7 @@ interface LoginFormValues {
 	password: string;
 }
 
-const LOGIN_ENDPOINT = "http://192.168.0.12:8070/auth/login";
+const LOGIN_ENDPOINT = `${API_BASE_URL}/auth/login`;
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const { t } = useTranslation();
