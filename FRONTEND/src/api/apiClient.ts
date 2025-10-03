@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { API_BASE_URL } from "@/global-config";
+import Swal from "sweetalert2";
 
 // Centralized Axios instance for live backend
 export const axiosInstance = axios.create({
@@ -15,8 +16,12 @@ export const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
 	(config) => {
-		// Attach auth token if you have one
-		const token = userStore.getState().token;
+		// Attach auth token from sessionStorage (check both 'authToken' and 'token' keys)
+		const token = sessionStorage.getItem("authToken") || sessionStorage.getItem("token") || userStore.getState().token;
+		console.log("🔑 Token being sent:", token ? `${token.substring(0, 20)}...` : "NO TOKEN FOUND");
+		console.log("📦 SessionStorage authToken:", sessionStorage.getItem("authToken"));
+		console.log("📦 SessionStorage token:", sessionStorage.getItem("token"));
+		console.log("📦 UserStore token:", userStore.getState().token);
 		if (token) config.headers.Authorization = `Bearer ${token}`;
 		return config;
 	},
@@ -44,10 +49,38 @@ axiosInstance.interceptors.response.use(
 	(error: AxiosError<Result>) => {
 		const { response, message } = error || {};
 		const errMsg = (response?.data as any)?.message || message || t("sys.api.errorMessage");
-		toast.error(errMsg, { position: "top-center" });
-		if (response?.status === 401) {
+		
+		// Check for token expiry messages
+		const isTokenExpired = 
+			errMsg.toLowerCase().includes("token expired") ||
+			errMsg.toLowerCase().includes("access token expired") ||
+			errMsg.toLowerCase().includes("access token required") ||
+			errMsg.toLowerCase().includes("token is missing") ||
+			response?.status === 401;
+
+		if (isTokenExpired) {
+			// Clear user data immediately
 			userStore.getState().actions.clearUserInfoAndToken();
+			sessionStorage.clear();
+			localStorage.clear();
+			
+			// Show SweetAlert2 for token expiry
+			Swal.fire({
+				title: "Session Expired",
+				text: errMsg || "Your session has expired. Please login again.",
+				icon: "warning",
+				confirmButtonText: "OK",
+				confirmButtonColor: "#3b82f6",
+				allowOutsideClick: false,
+			}).then(() => {
+				// Redirect to login page directly
+				window.location.replace("/login");
+			});
+		} else {
+			// Show regular toast for other errors
+			toast.error(errMsg, { position: "top-center" });
 		}
+		
 		return Promise.reject(error);
 	},
 );
@@ -61,6 +94,9 @@ class APIClient {
 	}
 	put<T = unknown>(config: AxiosRequestConfig): Promise<T> {
 		return this.request<T>({ ...config, method: "PUT" });
+	}
+	patch<T = unknown>(config: AxiosRequestConfig): Promise<T> {
+		return this.request<T>({ ...config, method: "PATCH" });
 	}
 	delete<T = unknown>(config: AxiosRequestConfig): Promise<T> {
 		return this.request<T>({ ...config, method: "DELETE" });
