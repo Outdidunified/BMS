@@ -122,6 +122,13 @@ export default function HistoryDevicesTab() {
 
               </tr>
             ))}
+           {devices.length === 0 && (
+             <tr>
+               <td colSpan={5} className="py-8 px-4 text-center text-gray-500">
+                 No devices found.
+               </td>
+             </tr>
+           )}
           </tbody>
         </table>
       </div>

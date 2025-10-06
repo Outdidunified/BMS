@@ -146,7 +146,7 @@ function UserProfile() {
 									{[
 										"Manage Users",
 										"Manage Roles",
-										"Manage Station Master",
+										"Manage Station ",
 										"Manage Devices",
 										"View History",
 										"Manage Notifications",
