@@ -8,7 +8,7 @@ export type LiveMessage = {
 };
 
 interface UseDeviceWebSocketOptions {
-  url?: string; // default to ws://192.168.0.12:8070
+  url?: string; // default to ws://192.168.0.35:8070
   onMessage?: (msg: LiveMessage) => void;
   reconnect?: boolean;
   reconnectDelayMs?: number;
@@ -18,7 +18,7 @@ interface UseDeviceWebSocketOptions {
 // Reusable WebSocket hook for backend live frames
 export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
   const {
-    url = "ws://192.168.0.12:8070",
+    url = "ws://192.168.0.35:8070",
     onMessage,
     reconnect = true,
     reconnectDelayMs = 2000,
