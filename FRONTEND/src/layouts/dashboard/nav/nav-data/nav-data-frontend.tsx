@@ -60,7 +60,7 @@ export const getFrontendNavData = (): NavProps["data"] => {
 			icon: <Icon icon="mdi:shield-account" size="24" />,
 		},
 		{
-			title: "Manage Station Master",
+			title: "Manage Station ",
 			path: "/manage-station-master",
 			icon: <Icon icon="mdi:office-building" size="24" />,
 		},

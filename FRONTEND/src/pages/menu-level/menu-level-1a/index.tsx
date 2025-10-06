@@ -203,7 +203,7 @@ export default function MenuLevel() {
 
   // WebSocket connection for live data
   const { connected: wsConnected, send: wsSend } = useDeviceWebSocket({
-    url: "ws://192.168.0.12:8071",
+    url: "ws://192.168.0.35:8071",
     reconnect: true,
     reconnectDelayMs: 2000,
     onMessage: handleWebSocketMessage,
@@ -490,7 +490,7 @@ export default function MenuLevel() {
 
 useEffect(() => {
   if (currentPage === "Analytics") {
-    fetch('http://192.168.0.12:8070/analytics') // assuming endpoint
+    fetch('http://192.168.0.35:8070/analytics') // assuming endpoint
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {

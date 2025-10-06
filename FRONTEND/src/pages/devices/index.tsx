@@ -29,6 +29,22 @@ function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  const getRoleId = (): number | null => {
+    try {
+      const authUser = sessionStorage.getItem("authUser");
+      if (authUser) {
+        const user = JSON.parse(authUser);
+        return user.role_id || null;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error getting role_id:", error);
+      return null;
+    }
+  };
+
+  const isAdmin = getRoleId() === 1;
   const [newDevice, setNewDevice] = useState({
     deviceId: "",
     batteryId: "",
@@ -45,6 +61,7 @@ function DevicesPage() {
 
   // Fetch all devices on component mount
   useEffect(() => {
+    console.log('role_id from sessionStorage authUser:', getRoleId());
     fetchDevices();
   }, []);
 
@@ -252,14 +269,16 @@ function DevicesPage() {
               Monitor and manage all your BMS devices from a single interface
             </CardDescription>
           </div>
-          <Button
-            className="flex items-center gap-2"
-            onClick={() => setShowAddForm(!showAddForm)}
-            disabled={loading}
-          >
-            <Icon icon="lucide:plus" size={18} />
-            Add Device
-          </Button>
+          {isAdmin && (
+            <Button
+              className="flex items-center gap-2"
+              onClick={() => setShowAddForm(!showAddForm)}
+              disabled={loading}
+            >
+              <Icon icon="lucide:plus" size={18} />
+              Add Device
+            </Button>
+          )}
         </CardHeader>
       </Card>
 
@@ -482,21 +501,23 @@ function DevicesPage() {
                               >
                                 <Icon icon="lucide:eye" size={18} />
                               </Button>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleEdit(device)}
-                                disabled={loading}
-                                title="Edit"
-                              >
-                                <Icon icon="lucide:edit" size={18} />
-                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() => handleEdit(device)}
+                                  disabled={loading}
+                                  title="Edit"
+                                >
+                                  <Icon icon="lucide:edit" size={18} />
+                                </Button>
+                              )}
                               <Button
   size="icon"
   variant="outline"
   className="relative w-12 h-6 rounded-full border-1 border-gray-400 transition-colors data-[active=true]:border-green-500"
   onClick={() => handleToggleStatus(device.deviceId, device.status)}
-  disabled={loading}
+  disabled={!isAdmin || loading}
   title={device.status ? "Deactivate" : "Activate"}
   data-active={device.status}
 >
