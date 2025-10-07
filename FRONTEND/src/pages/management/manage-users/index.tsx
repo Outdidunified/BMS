@@ -1,337 +1,356 @@
-import { Icon } from "@/components/icon";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import Swal, { SweetAlertResult } from "sweetalert2";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/ui/card";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
+import { Input } from "@/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/ui/select";
+import { Switch } from "@/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/ui/table";
 import { Badge } from "@/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
-import { Title } from "@/ui/typography";
-import { Input } from "@/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import { useState } from "react";
+import { Icon } from "@/components/icon";
+import { API_BASE_URL } from "@/global-config";
+
+interface Station {
+  _id: string;
+  station_id: number;
+  name: string;
+  location: string;
+}
+
+interface Role {
+  _id: string;
+  role_id: number;
+  name: string;
+}
 
 interface User {
-	id: number;
-	username: string;
-	email: string;
-	fullName: string;
-	role: string;
-	roleId: number;
-	status: "active" | "inactive" | "suspended";
-	lastLogin: string;
-	createdAt: string;
-	avatar?: string;
+  _id: string;
+  username: string;
+  email: string;
+  role_id: number;
+  status: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user_id?: string;
 }
 
-// Mock data - replace with actual API call
-const mockUsers: User[] = [
-	{
-		id: 1,
-		username: "admin",
-		email: "admin@bms.com",
-		fullName: "System Administrator",
-		role: "Administrator",
-		roleId: 1,
-		status: "active",
-		lastLogin: "2024-12-20 10:30:00",
-		createdAt: "2024-01-15",
-	},
-	{
-		id: 2,
-		username: "manager1",
-		email: "manager1@bms.com",
-		fullName: "John Manager",
-		role: "Manager",
-		roleId: 2,
-		status: "active",
-		lastLogin: "2024-12-19 16:45:00",
-		createdAt: "2024-02-01",
-	},
-	{
-		id: 3,
-		username: "operator1",
-		email: "operator1@bms.com",
-		fullName: "Jane Operator",
-		role: "Operator",
-		roleId: 3,
-		status: "active",
-		lastLogin: "2024-12-20 08:15:00",
-		createdAt: "2024-02-15",
-	},
-	{
-		id: 4,
-		username: "viewer1",
-		email: "viewer1@bms.com",
-		fullName: "Bob Viewer",
-		role: "Viewer",
-		roleId: 4,
-		status: "inactive",
-		lastLogin: "2024-12-10 14:20:00",
-		createdAt: "2024-03-01",
-	},
-	{
-		id: 5,
-		username: "operator2",
-		email: "operator2@bms.com",
-		fullName: "Alice Smith",
-		role: "Operator",
-		roleId: 3,
-		status: "suspended",
-		lastLogin: "2024-12-05 11:30:00",
-		createdAt: "2024-03-15",
-	}
-];
+const ManageUsersPage: React.FC = () => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-function ManageUsers() {
-	const [users] = useState<User[]>(mockUsers);
-	const [searchTerm, setSearchTerm] = useState("");
-	const [statusFilter, setStatusFilter] = useState<string>("all");
-	const [roleFilter, setRoleFilter] = useState<string>("all");
+  // Create User Form States
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [roleId, setRoleId] = useState<number | null>(null);
+  const [stationId, setStationId] = useState<number | null>(null);
 
-	// Filter users based on search and filters
-	const filteredUsers = users.filter(user => {
-		const matchesSearch = user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.email.toLowerCase().includes(searchTerm.toLowerCase());
-		
-		const matchesStatus = statusFilter === "all" || user.status === statusFilter;
-		const matchesRole = roleFilter === "all" || user.role === roleFilter;
-		
-		return matchesSearch && matchesStatus && matchesRole;
-	});
+  const token = sessionStorage.getItem("authToken");
+  const headers = { Authorization: `Bearer ${token}` };
 
-	const handleCreateUser = () => {
-		// TODO: Implement create user functionality
-		console.log("Create new user");
-	};
+  // Fetch initial data
+  useEffect(() => {
+    fetchUsers();
+    fetchRoles();
+    fetchStations();
+  }, []);
 
-	const handleEditUser = (userId: number) => {
-		// TODO: Implement edit user functionality
-		console.log("Edit user:", userId);
-	};
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/auth/getUsers`, { headers });
+      if (res.data.success) setUsers(res.data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-	const handleDeleteUser = (userId: number) => {
-		// TODO: Implement delete user functionality
-		console.log("Delete user:", userId);
-	};
+  const fetchRoles = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/roles/getRoles`, { headers });
+      if (res.data.success) setRoles(res.data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-	const handleToggleStatus = (userId: number) => {
-		// TODO: Implement toggle user status functionality
-		console.log("Toggle status for user:", userId);
-	};
+  const fetchStations = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/stations/getStations`, { headers });
+      if (res.data.success) setStations(res.data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-	const getStatusBadge = (status: string) => {
-		const variants = {
-			active: "default",
-			inactive: "secondary",
-			suspended: "destructive"
-		} as const;
-		
-		return (
-			<Badge variant={variants[status as keyof typeof variants] || "secondary"}>
-				{status}
-			</Badge>
-		);
-	};
+  const createUser = async () => {
+    if (!username || !email || !password || !roleId || !stationId) {
+      Swal.fire("Error", "Please fill all fields", "error");
+      return;
+    }
+    try {
+      const res = await axios.post(
+        `${API_BASE_URL}/auth/CreateUser/`,
+        { username, email, password, role_id: roleId, station_id: stationId },
+        { headers }
+      );
+      if (res.data.success) {
+        Swal.fire("Success", res.data.message, "success");
+        fetchUsers();
+        setShowCreateForm(false);
+        setUsername(""); setEmail(""); setPassword(""); setRoleId(null); setStationId(null);
+      }
+    } catch (err: any) {
+      Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
+    }
+  };
 
-	const getRoleBadge = (role: string) => {
-		const colors = {
-			Administrator: "bg-red-100 text-red-800",
-			Manager: "bg-blue-100 text-blue-800",
-			Operator: "bg-green-100 text-green-800",
-			Viewer: "bg-gray-100 text-gray-800"
-		} as const;
-		
-		return (
-			<Badge className={colors[role as keyof typeof colors] || "bg-gray-100 text-gray-800"}>
-				{role}
-			</Badge>
-		);
-	};
+  const handleEditUser = (user: User) => {
+    Swal.fire({
+      title: "Edit Username",
+      html: `<input id="swal-username" class="swal2-input" placeholder="Username" value="${user.username}" />`,
+      focusConfirm: false,
+      showCancelButton: true,
+      preConfirm: () => {
+        const usernameInput = (document.getElementById("swal-username") as HTMLInputElement)?.value;
+        if (!usernameInput) {
+          Swal.showValidationMessage("Please enter a username");
+          return;
+        }
+        return { username: usernameInput };
+      },
+    }).then((result: SweetAlertResult<{ username: string }>) => {
+      if (result.isConfirmed && result.value) {
+        axios
+          .put(
+            `${API_BASE_URL}/auth/updateUser/${user._id}`,
+            { username: result.value.username },
+            { headers }
+          )
+          .then(() => {
+            Swal.fire("Success", "Username updated successfully", "success");
+            fetchUsers();
+          })
+          .catch((err) => {
+            Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
+          });
+      }
+    });
+  };
 
-	const getInitials = (name: string) => {
-		return name.split(' ').map(n => n[0]).join('').toUpperCase();
-	};
+  const toggleUserStatus = (userId: string, currentStatus: boolean) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `You are about to ${currentStatus ? 'deactivate' : 'activate'} this user.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: `Yes, ${currentStatus ? 'deactivate' : 'activate'}!`,
+      cancelButtonText: 'Cancel',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        axios.put(
+          `${API_BASE_URL}/auth/deactivateuser/${userId}`,
+          { status: !currentStatus },
+          { headers }
+        )
+        .then((res) => {
+          if (res.data.success) {
+            Swal.fire('Success', 'User status updated', 'success');
+            fetchUsers();
+          }
+        })
+        .catch((err) => {
+          Swal.fire('Error', err?.response?.data?.message || 'Something went wrong', 'error');
+        });
+      }
+    });
+  };
 
-	return (
-		<div className="space-y-6">
-			{/* Header */}
-			<div className="flex items-center justify-between">
-				<div>
-					<Title as="h1" className="text-2xl font-bold">
-						Manage Users
-					</Title>
-					<p className="text-muted-foreground mt-1">
-						Create and manage system users and their access
-					</p>
-				</div>
-				<Button onClick={handleCreateUser} className="flex items-center gap-2">
-					<Icon icon="mdi:plus" size={16} />
-					Create User
-				</Button>
-			</div>
+  const fetchUserDetails = async (userId?: string, user?: User) => {
+  if (!userId && !user) return;
 
-			{/* Stats Cards */}
-			<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm font-medium">Total Users</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{users.length}</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm font-medium">Active Users</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">
-							{users.filter(user => user.status === "active").length}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm font-medium">Inactive Users</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">
-							{users.filter(user => user.status === "inactive").length}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm font-medium">Suspended Users</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">
-							{users.filter(user => user.status === "suspended").length}
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+  try {
+    const res = await axios.get(`http://192.168.0.35:8070/auth/getProfile`, {
+      params: { userId: userId || user?.user_id },
+      headers
+    });
 
-			{/* Filters */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Users</CardTitle>
-					<CardDescription>
-						Manage system users and their permissions
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<div className="flex flex-col sm:flex-row gap-4 mb-6">
-						<div className="flex-1">
-							<Input
-								placeholder="Search users..."
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-								className="max-w-sm"
-							/>
-						</div>
-						<Select value={statusFilter} onValueChange={setStatusFilter}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="Filter by status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Status</SelectItem>
-								<SelectItem value="active">Active</SelectItem>
-								<SelectItem value="inactive">Inactive</SelectItem>
-								<SelectItem value="suspended">Suspended</SelectItem>
-							</SelectContent>
-						</Select>
-						<Select value={roleFilter} onValueChange={setRoleFilter}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="Filter by role" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Roles</SelectItem>
-								<SelectItem value="Administrator">Administrator</SelectItem>
-								<SelectItem value="Manager">Manager</SelectItem>
-								<SelectItem value="Operator">Operator</SelectItem>
-								<SelectItem value="Viewer">Viewer</SelectItem>
-							</SelectContent>
-						</Select>
-					</div>
+    let data = res.data.success ? res.data.data : user; // fallback to frontend data
 
-					{/* Users Table */}
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>User</TableHead>
-								<TableHead>Email</TableHead>
-								<TableHead>Role</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>Last Login</TableHead>
-								<TableHead>Created</TableHead>
-								<TableHead className="text-right">Actions</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{filteredUsers.map((user) => (
-								<TableRow key={user.id}>
-									<TableCell>
-										<div className="flex items-center gap-3">
-											<Avatar className="h-8 w-8">
-												<AvatarImage src={user.avatar} />
-												<AvatarFallback>{getInitials(user.fullName)}</AvatarFallback>
-											</Avatar>
-											<div>
-												<div className="font-medium">{user.fullName}</div>
-												<div className="text-sm text-muted-foreground">@{user.username}</div>
-											</div>
-										</div>
-									</TableCell>
-									<TableCell>{user.email}</TableCell>
-									<TableCell>{getRoleBadge(user.role)}</TableCell>
-									<TableCell>{getStatusBadge(user.status)}</TableCell>
-									<TableCell className="text-sm">{user.lastLogin}</TableCell>
-									<TableCell>{user.createdAt}</TableCell>
-									<TableCell className="text-right">
-										<div className="flex items-center justify-end gap-2">
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => handleToggleStatus(user.id)}
-												title={user.status === "active" ? "Suspend user" : "Activate user"}
-											>
-												<Icon 
-													icon={user.status === "active" ? "mdi:pause" : "mdi:play"} 
-													size={16} 
-												/>
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => handleEditUser(user.id)}
-											>
-												<Icon icon="mdi:pencil" size={16} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => handleDeleteUser(user.id)}
-												disabled={user.id === 1} // Prevent deleting admin user
-											>
-												<Icon icon="mdi:delete" size={16} />
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
+    Swal.fire({
+      title: `User Details: ${data?.username || "N/A"}`,
+      html: `
+        <p><strong>Username:</strong> ${data?.username || "N/A"}</p>
+        <p><strong>Email:</strong> ${data?.email || "N/A"}</p>
+        <p><strong>Role:</strong> ${data?.role || roles.find(r => r.role_id === user?.role_id)?.name || "N/A"}</p>
+        <p><strong>Status:</strong> ${data?.status ? 'Active' : 'Inactive'}</p>
+        <p><strong>Assigned Stations:</strong> ${data?.assigned_station_ids?.length 
+            ? data.assigned_station_ids.map((s: any) => s.stationNumber).join(', ') 
+            : "N/A"}</p>
+        <p><strong>Created At:</strong> ${data?.createdAt ? new Date(data.createdAt).toLocaleString() : "N/A"}</p>
+        <p><strong>Updated At:</strong> ${data?.updatedAt ? new Date(data.updatedAt).toLocaleString() : "N/A"}</p>
+      `,
+      width: 500,
+      confirmButtonText: 'Close'
+    });
+  } catch (err) {
+    console.error(err);
+    Swal.fire('Error', 'Failed to fetch user details', 'error');
+  }
+};
 
-					{filteredUsers.length === 0 && (
-						<div className="text-center py-8 text-muted-foreground">
-							No users found matching your criteria.
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		</div>
-	);
-}
 
-export default ManageUsers;
+  const totalUsers = users.length;
+  const activeUsers = users.filter((u) => u.status).length;
+  const inactiveUsers = totalUsers - activeUsers;
+
+  return (
+    <div className="p-8">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Manage Users</h1>
+          <p className="text-gray-500 mt-1">Create and manage system users and their access</p>
+        </div>
+        <Button onClick={() => setShowCreateForm(!showCreateForm)}>Create User</Button>
+      </div>
+
+      {/* Create User Form */}
+      {showCreateForm && (
+        <Card className="mb-6 p-6">
+          <CardHeader>
+            <CardTitle>Create New User</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Select onValueChange={(val) => setRoleId(Number(val))}>
+              <SelectTrigger><SelectValue placeholder="Select Role" /></SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem key={role.role_id} value={role.role_id.toString()}>{role.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select onValueChange={(val) => setStationId(Number(val))}>
+              <SelectTrigger><SelectValue placeholder="Select Station" /></SelectTrigger>
+              <SelectContent>
+                {stations.map((station) => (
+                  <SelectItem key={station.station_id} value={station.station_id.toString()}>{station.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+          <div className="mt-4 flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => {
+              setShowCreateForm(false);
+              setUsername(""); setEmail(""); setPassword(""); setRoleId(null); setStationId(null);
+            }}>Cancel</Button>
+            <Button onClick={createUser}>Submit</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Stats Boxes */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card className="p-4 text-center">
+          <CardTitle>Total Users</CardTitle>
+          <CardDescription>{totalUsers}</CardDescription>
+        </Card>
+        <Card className="p-4 text-center">
+          <CardTitle>Active Users</CardTitle>
+          <CardDescription>{activeUsers}</CardDescription>
+        </Card>
+        <Card className="p-4 text-center">
+          <CardTitle>Inactive Users</CardTitle>
+          <CardDescription>{inactiveUsers}</CardDescription>
+        </Card>
+      </div>
+
+      {/* Users Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>Manage system users</CardDescription>
+        </CardHeader>
+
+        <CardContent className="overflow-x-auto">
+          <Table className="min-w-full">
+            <TableHeader>
+              <TableRow className="bg-gray-100">
+                <TableHead className="p-4 text-left">Username</TableHead>
+                <TableHead className="p-4 text-left">Email</TableHead>
+                <TableHead className="p-4 text-left">Role</TableHead>
+                <TableHead className="p-4 text-left">Status</TableHead>
+                <TableHead className="p-4 text-left">Created</TableHead>
+                <TableHead className="p-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow key={user._id} className="hover:bg-gray-50 transition-colors">
+                  <TableCell className="p-4 font-medium">{user.username}</TableCell>
+                  <TableCell className="p-4">{user.email}</TableCell>
+                  <TableCell className="p-4">{roles.find(r => r.role_id === user.role_id)?.name || "N/A"}</TableCell>
+                  <TableCell className="p-4">
+                    <Badge variant={user.status ? "default" : "secondary"} className={user.status ? "bg-green-100 text-green-800" : ""}>
+                      {user.status ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="p-4">{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {/* View User */}
+                     <Button
+  variant="ghost"
+  size="sm"
+  className="p-2 hover:bg-gray-100 rounded"
+  onClick={() => fetchUserDetails(user.user_id, user)}
+>
+  <Icon icon="mdi:eye" size={16} />
+</Button>
+
+
+                      {/* Edit Username */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-2 hover:bg-gray-100 rounded"
+                        onClick={() => handleEditUser(user)}
+                      >
+                        <Icon icon="mdi:pencil" size={16} />
+                      </Button>
+
+                      {/* Toggle Status */}
+                      <Switch
+                        checked={user.status}
+                        onCheckedChange={() => toggleUserStatus(user._id, user.status)}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default ManageUsersPage;
