@@ -7,7 +7,7 @@ import { Switch } from "@/ui/switch";
 import { Title } from "@/ui/typography";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/ui/dialog";
 import { Label } from "@/ui/label";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import apiClient from "@/api/apiClient";
@@ -49,6 +49,16 @@ function ManageStationMaster() {
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [showAssignUsersDialog, setShowAssignUsersDialog] = useState(false);
 	const [deviceDialogStation, setDeviceDialogStation] = useState<Station | null>(null);
+
+
+
+
+
+
+
+
+
+	
 
 	const getRoleId = (): number | null => {
 		try {
@@ -430,26 +440,8 @@ const handleAddStation = async () => {
 	};
 
 	const handleViewWarnings = (station: Station) => {
-		Swal.fire({
-			title: "Warnings",
-			html: `
-				<div style="text-align: left; padding: 10px;">
-					<h3>Cell Voltage</h3>
-					<p>High: ${station.warnings.cellVoltage.high}V</p>
-					<p>Low: ${station.warnings.cellVoltage.low}V</p>
-					<p>Check Interval: ${station.warnings.cellVoltage.checkInterval}s</p>
-					<h3>Temperature</h3>
-					<p>High: ${station.warnings.temperature.high}°C</p>
-					<p>Low: ${station.warnings.temperature.low}°C</p>
-					<p>Check Interval: ${station.warnings.temperature.checkInterval}s</p>
-					<h3>Current</h3>
-					<p>High: ${station.warnings.current.high}A</p>
-					<p>Low: ${station.warnings.current.low}A</p>
-					<p>Check Interval: ${station.warnings.current.checkInterval}s</p>
-				</div>
-			`,
-			confirmButtonColor: "#3b82f6",
-		});
+		setSelectedWarningsStation(station);
+		setTimeout(() => setViewWarningsModalOpen(true), 0);
 	};
 
 	const getStatusBadge = (status: boolean) => {
@@ -732,12 +724,56 @@ const handleAddStation = async () => {
           )}
         </TableCell>
 
-        {/* Device ID */}
-        <TableCell>
-          <Badge variant="outline">
-            {station.devices?.device_id || "-"}
-          </Badge>
-        </TableCell>
+{/* Device ID */}
+<TableCell>
+  <Dialog>
+    <DialogTrigger asChild>
+      <Button
+        variant="ghost"
+        size="sm"
+        title="View devices"
+        className="text-green-600 hover:text-blue-700 hover:bg-blue-50"
+      >
+        View Devices
+      </Button>
+    </DialogTrigger>
+    <DialogContent className="sm:max-w-[600px]">
+      <DialogHeader>
+        <DialogTitle>Device Data</DialogTitle>
+        <DialogDescription>
+          Device information for the station.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="py-4">
+        {station.devices ? (
+          <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto">
+            {JSON.stringify(station.devices, null, 2)}
+          </pre>
+        ) : (
+          <div className="text-center">No device details available.</div>
+        )}
+      </div>
+
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">
+            Close
+          </Button>
+        </DialogClose>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</TableCell>
+
+
+
+
+
+
+
+
+
 
         {/* Status Toggle */}
         <TableCell>
@@ -784,6 +820,54 @@ const handleAddStation = async () => {
                 >
                   <Icon icon="mdi:pencil" size={16} />
                 </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="View warnings"
+                    >
+                      <Icon icon="mdi:alert" size={16} />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Warning Details</DialogTitle>
+                      <DialogDescription>
+                        Review recent alerts for this station.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium">Cell Voltage</h4>
+                        <p>High: {station.warnings?.cellVoltage?.high ?? "N/A"}V</p>
+                        <p>Low: {station.warnings?.cellVoltage?.low ?? "N/A"}V</p>
+                        <p>Check Interval: {station.warnings?.cellVoltage?.checkInterval ?? "N/A"}s</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Temperature</h4>
+                        <p>High: {station.warnings?.temperature?.high ?? "N/A"}°C</p>
+                        <p>Low: {station.warnings?.temperature?.low ?? "N/A"}°C</p>
+                        <p>Check Interval: {station.warnings?.temperature?.checkInterval ?? "N/A"}s</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Current</h4>
+                        <p>High: {station.warnings?.current?.high ?? "N/A"}A</p>
+                        <p>Low: {station.warnings?.current?.low ?? "N/A"}A</p>
+                        <p>Check Interval: {station.warnings?.current?.checkInterval ?? "N/A"}s</p>
+                      </div>
+                    </div>
+
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">
+                          Close
+                        </Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
   <Switch
     checked={station.status}
     onCheckedChange={() => handleToggleStatus(station._id, station.status)}
