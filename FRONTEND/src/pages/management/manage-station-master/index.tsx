@@ -737,34 +737,80 @@ const handleAddStation = async () => {
         View Devices
       </Button>
     </DialogTrigger>
+
     <DialogContent className="sm:max-w-[600px]">
-      <DialogHeader>
-        <DialogTitle>Device Data</DialogTitle>
-        <DialogDescription>
-          Device information for the station.
-        </DialogDescription>
-      </DialogHeader>
+   <DialogHeader className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+  <div>
+    <DialogTitle>Device Data</DialogTitle>
+    <DialogDescription>
+      List of device IDs for this station.
+    </DialogDescription>
+  </div>
 
-      <div className="py-4">
-        {station.devices ? (
-          <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto">
-            {JSON.stringify(station.devices, null, 2)}
-          </pre>
+  <div className="flex items-center gap-3 pr-6"> {/* space before built-in close icon */}
+    {/* Assign Device button */}
+    <Button
+      variant="outline"
+      size="sm"
+      className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800"
+    >
+      Assign Device to this Station
+    </Button>
+  </div>
+</DialogHeader>
+
+
+
+      {/* Device List */}
+      {station.devices && Object.keys(station.devices).length > 0 ? (
+        Array.isArray(station.devices) ? (
+          station.devices.map((device, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50"
+            >
+              <span className="text-gray-800 font-medium">
+                Device ID:{" "}
+                <span className="text-gray-600">{device.device_id || "-"}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+              >
+                Unassign Device
+              </Button>
+            </div>
+          ))
         ) : (
-          <div className="text-center">No device details available.</div>
-        )}
-      </div>
-
-      <DialogFooter>
-        <DialogClose asChild>
-          <Button variant="outline">
-            Close
-          </Button>
-        </DialogClose>
-      </DialogFooter>
+          <div className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50">
+            <span className="text-gray-800 font-medium">
+              Device ID:{" "}
+              <span className="text-gray-600">
+                {station.devices.device_id || "-"}
+              </span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              Unassign Device
+            </Button>
+          </div>
+        )
+      ) : (
+        <div className="text-center text-gray-500 py-4">
+          No device details available.
+        </div>
+      )}
     </DialogContent>
   </Dialog>
 </TableCell>
+
+
+
 
 
 
@@ -820,54 +866,61 @@ const handleAddStation = async () => {
                 >
                   <Icon icon="mdi:pencil" size={16} />
                 </Button>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="View warnings"
-                    >
-                      <Icon icon="mdi:alert" size={16} />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Warning Details</DialogTitle>
-                      <DialogDescription>
-                        Review recent alerts for this station.
-                      </DialogDescription>
-                    </DialogHeader>
+               <Dialog>
+  <DialogTrigger asChild>
+    <Button variant="ghost" size="sm" title="View warnings">
+      <Icon
+        icon="mdi:alert"
+        size={16}
+        className={
+          station.warnings &&
+          (station.warnings.cellVoltage ||
+            station.warnings.temperature ||
+            station.warnings.current)
+            ? "text-yellow-500 animate-pulse"
+            : "text-gray-400"
+        }
+      />
+    </Button>
+  </DialogTrigger>
 
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium">Cell Voltage</h4>
-                        <p>High: {station.warnings?.cellVoltage?.high ?? "N/A"}V</p>
-                        <p>Low: {station.warnings?.cellVoltage?.low ?? "N/A"}V</p>
-                        <p>Check Interval: {station.warnings?.cellVoltage?.checkInterval ?? "N/A"}s</p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Temperature</h4>
-                        <p>High: {station.warnings?.temperature?.high ?? "N/A"}°C</p>
-                        <p>Low: {station.warnings?.temperature?.low ?? "N/A"}°C</p>
-                        <p>Check Interval: {station.warnings?.temperature?.checkInterval ?? "N/A"}s</p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Current</h4>
-                        <p>High: {station.warnings?.current?.high ?? "N/A"}A</p>
-                        <p>Low: {station.warnings?.current?.low ?? "N/A"}A</p>
-                        <p>Check Interval: {station.warnings?.current?.checkInterval ?? "N/A"}s</p>
-                      </div>
-                    </div>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Warning Details</DialogTitle>
+      <DialogDescription>
+        Review recent alerts for this station.
+      </DialogDescription>
+    </DialogHeader>
 
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">
-                          Close
-                        </Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+    <div className="space-y-4">
+      <div>
+        <h4 className="font-medium">Cell Voltage</h4>
+        <p>High: {station.warnings?.cellVoltage?.high ?? "N/A"}V</p>
+        <p>Low: {station.warnings?.cellVoltage?.low ?? "N/A"}V</p>
+        <p>Check Interval: {station.warnings?.cellVoltage?.checkInterval ?? "N/A"}s</p>
+      </div>
+      <div>
+        <h4 className="font-medium">Temperature</h4>
+        <p>High: {station.warnings?.temperature?.high ?? "N/A"}°C</p>
+        <p>Low: {station.warnings?.temperature?.low ?? "N/A"}°C</p>
+        <p>Check Interval: {station.warnings?.temperature?.checkInterval ?? "N/A"}s</p>
+      </div>
+      <div>
+        <h4 className="font-medium">Current</h4>
+        <p>High: {station.warnings?.current?.high ?? "N/A"}A</p>
+        <p>Low: {station.warnings?.current?.low ?? "N/A"}A</p>
+        <p>Check Interval: {station.warnings?.current?.checkInterval ?? "N/A"}s</p>
+      </div>
+    </div>
+
+    <DialogFooter>
+      <DialogClose asChild>
+        <Button variant="outline">Close</Button>
+      </DialogClose>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
   <Switch
     checked={station.status}
     onCheckedChange={() => handleToggleStatus(station._id, station.status)}
