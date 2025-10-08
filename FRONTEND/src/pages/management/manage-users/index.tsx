@@ -18,10 +18,18 @@ import {
   SelectValue,
 } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/ui/table";
 import { Badge } from "@/ui/badge";
 import { Icon } from "@/components/icon";
 import { API_BASE_URL } from "@/global-config";
+import { Eye, EyeOff } from "lucide-react";
 
 interface Station {
   _id: string;
@@ -34,6 +42,14 @@ interface Role {
   _id: string;
   role_id: number;
   name: string;
+}
+
+interface Device {
+  _id: string;
+  deviceId: string;
+  batteryId: string;
+  macId: string;
+  status: boolean;
 }
 
 interface User {
@@ -51,23 +67,26 @@ const ManageUsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Create User Form States
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState<number | null>(null);
-  const [stationId, setStationId] = useState<number | null>(null);
+  const [stationId, setStationId] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
 
   const token = sessionStorage.getItem("authToken");
   const headers = { Authorization: `Bearer ${token}` };
 
-  // Fetch initial data
   useEffect(() => {
     fetchUsers();
     fetchRoles();
     fetchStations();
+    fetchUnassignedSummary();
   }, []);
 
   const fetchUsers = async () => {
@@ -97,42 +116,54 @@ const ManageUsersPage: React.FC = () => {
     }
   };
 
- const createUser = async () => {
-  if (!username || !email || !password || !roleId) {
-    Swal.fire("Error", "Please fill all required fields", "error");
-    return;
-  }
-
-  try {
-    const payload: any = {
-      username,
-      email,
-      password,
-      role_id: roleId,
-    };
-
-    // only include station_id if selected
-    if (stationId) payload.station_id = stationId;
-
-    const res = await axios.post(`${API_BASE_URL}/auth/CreateUser/`, payload, { headers });
-
-    if (res.data.success) {
-      Swal.fire("Success", res.data.message, "success");
-      fetchUsers();
-      setShowCreateForm(false);
-
-      // reset form
-      setUsername("");
-      setEmail("");
-      setPassword("");
-      setRoleId(null);
-      setStationId(null);
+  const fetchUnassignedSummary = async () => {
+    try {
+      const res = await axios.get(`http://192.168.0.28:8070/stations/unassignedSummary/`, { headers });
+      if (res.data.success) {
+        setStations(res.data.data.unassignedStations || []);
+        setDevices(res.data.data.unassignedDevices || []);
+      }
+    } catch (err) {
+      console.error("Error fetching unassigned summary", err);
     }
-  } catch (err: any) {
-    Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
-  }
-};
+  };
 
+  const createUser = async () => {
+    if (!username || !email || !password || !roleId) {
+      Swal.fire("Error", "Please fill all required fields (username, email, password, role)", "error");
+      return;
+    }
+
+    try {
+      const payload: any = {
+        username,
+        email,
+        password,
+        role_id: roleId,
+      };
+
+      if (stationId) payload.station_id = stationId;
+      if (deviceId) payload.device_id = deviceId;
+
+      console.log("Payload sent:", payload);
+
+      const res = await axios.post(`${API_BASE_URL}/auth/CreateUser/`, payload, { headers });
+
+      if (res.data.success) {
+        Swal.fire("Success", res.data.message, "success");
+        fetchUsers();
+        setShowCreateForm(false);
+        setUsername("");
+        setEmail("");
+        setPassword("");
+        setRoleId(null);
+        setStationId(null);
+        setDeviceId(null);
+      }
+    } catch (err: any) {
+      Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
+    }
+  };
 
   const handleEditUser = (user: User) => {
     Swal.fire({
@@ -151,11 +182,7 @@ const ManageUsersPage: React.FC = () => {
     }).then((result: SweetAlertResult<{ username: string }>) => {
       if (result.isConfirmed && result.value) {
         axios
-          .put(
-            `${API_BASE_URL}/auth/updateUser/${user._id}`,
-            { username: result.value.username },
-            { headers }
-          )
+          .put(`${API_BASE_URL}/auth/updateUser/${user._id}`, { username: result.value.username }, { headers })
           .then(() => {
             Swal.fire("Success", "Username updated successfully", "success");
             fetchUsers();
@@ -169,65 +196,59 @@ const ManageUsersPage: React.FC = () => {
 
   const toggleUserStatus = (userId: string, currentStatus: boolean) => {
     Swal.fire({
-      title: 'Are you sure?',
-      text: `You are about to ${currentStatus ? 'deactivate' : 'activate'} this user.`,
-      icon: 'warning',
+      title: "Are you sure?",
+      text: `You are about to ${currentStatus ? "deactivate" : "activate"} this user.`,
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonText: `Yes, ${currentStatus ? 'deactivate' : 'activate'}!`,
-      cancelButtonText: 'Cancel',
+      confirmButtonText: `Yes, ${currentStatus ? "deactivate" : "activate"}!`,
+      cancelButtonText: "Cancel",
     }).then((result) => {
       if (result.isConfirmed) {
-        axios.put(
-          `${API_BASE_URL}/auth/deactivateuser/${userId}`,
-          { status: !currentStatus },
-          { headers }
-        )
-        .then((res) => {
-          if (res.data.success) {
-            Swal.fire('Success', 'User status updated', 'success');
-            fetchUsers();
-          }
-        })
-        .catch((err) => {
-          Swal.fire('Error', err?.response?.data?.message || 'Something went wrong', 'error');
-        });
+        axios
+          .put(`${API_BASE_URL}/auth/deactivateuser/${userId}`, { status: !currentStatus }, { headers })
+          .then((res) => {
+            if (res.data.success) {
+              Swal.fire("Success", "User status updated", "success");
+              fetchUsers();
+            }
+          })
+          .catch((err) => {
+            Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
+          });
       }
     });
   };
 
   const fetchUserDetails = async (userId?: string, user?: User) => {
-  if (!userId && !user) return;
+    if (!userId && !user) return;
 
-  try {
-    const res = await axios.get(`http://192.168.0.40:8070/auth/getProfile`, {
-      params: { userId: userId || user?.user_id },
-      headers
-    });
+    try {
+      const res = await axios.get(`http://192.168.0.28:8070/auth/getProfile`, {
+        params: { userId: userId || user?.user_id },
+        headers,
+      });
 
-    let data = res.data.success ? res.data.data : user; // fallback to frontend data
+      const data = res.data.success ? res.data.data : user;
 
-    Swal.fire({
-      title: `User Details: ${data?.username || "N/A"}`,
-      html: `
-        <p><strong>Username:</strong> ${data?.username || "N/A"}</p>
-        <p><strong>Email:</strong> ${data?.email || "N/A"}</p>
-        <p><strong>Role:</strong> ${data?.role || roles.find(r => r.role_id === user?.role_id)?.name || "N/A"}</p>
-        <p><strong>Status:</strong> ${data?.status ? 'Active' : 'Inactive'}</p>
-        <p><strong>Assigned Stations:</strong> ${data?.assigned_station_ids?.length 
-            ? data.assigned_station_ids.map((s: any) => s.stationNumber).join(', ') 
-            : "N/A"}</p>
-        <p><strong>Created At:</strong> ${data?.createdAt ? new Date(data.createdAt).toLocaleString() : "N/A"}</p>
-        <p><strong>Updated At:</strong> ${data?.updatedAt ? new Date(data.updatedAt).toLocaleString() : "N/A"}</p>
-      `,
-      width: 500,
-      confirmButtonText: 'Close'
-    });
-  } catch (err) {
-    console.error(err);
-    Swal.fire('Error', 'Failed to fetch user details', 'error');
-  }
-};
-
+      Swal.fire({
+        title: `User Details: ${data?.username || "N/A"}`,
+        html: `
+          <p><strong>Username:</strong> ${data?.username || "N/A"}</p>
+          <p><strong>Email:</strong> ${data?.email || "N/A"}</p>
+          <p><strong>Role:</strong> ${data?.role || roles.find((r) => r.role_id === user?.role_id)?.name || "N/A"}</p>
+          <p><strong>Status:</strong> ${data?.status ? "Active" : "Inactive"}</p>
+          <p><strong>Created At:</strong> ${
+            data?.createdAt ? new Date(data.createdAt).toLocaleString() : "N/A"
+          }</p>
+        `,
+        width: 500,
+        confirmButtonText: "Close",
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Error", "Failed to fetch user details", "error");
+    }
+  };
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status).length;
@@ -235,7 +256,6 @@ const ManageUsersPage: React.FC = () => {
 
   return (
     <div className="p-8">
-      {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-3xl font-bold">Manage Users</h1>
@@ -244,7 +264,6 @@ const ManageUsersPage: React.FC = () => {
         <Button onClick={() => setShowCreateForm(!showCreateForm)}>Create User</Button>
       </div>
 
-      {/* Create User Form */}
       {showCreateForm && (
         <Card className="mb-6 p-6">
           <CardHeader>
@@ -253,35 +272,86 @@ const ManageUsersPage: React.FC = () => {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
             <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Select onValueChange={(val) => setRoleId(Number(val))}>
-              <SelectTrigger><SelectValue placeholder="Select Role" /></SelectTrigger>
-              <SelectContent>
-                {roles.map((role) => (
-                  <SelectItem key={role.role_id} value={role.role_id.toString()}>{role.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select onValueChange={(val) => setStationId(Number(val))}>
-              <SelectTrigger><SelectValue placeholder="Select Station" /></SelectTrigger>
-              <SelectContent>
-                {stations.map((station) => (
-                  <SelectItem key={station.station_id} value={station.station_id.toString()}>{station.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+  <Input
+    placeholder="Password"
+    type={showPassword ? "text" : "password"}
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+  />
+  <button
+    type="button"
+    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+    onClick={() => setShowPassword(!showPassword)}
+  >
+    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+  </button>
+</div>
+            {/* Role - Required */}
+<Select onValueChange={(val) => setRoleId(Number(val))}>
+  <SelectTrigger className="w-full">
+    <SelectValue placeholder="Select Role *" />
+  </SelectTrigger>
+  <SelectContent className="w-full">
+    {roles.map((role) => (
+      <SelectItem key={role.role_id} value={role.role_id.toString()}>
+        {role.name}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
+{/* Station - Optional */}
+<Select onValueChange={(val) => setStationId(val)}>
+  <SelectTrigger className="w-full">
+    <SelectValue placeholder="Select Station (Optional)" />
+  </SelectTrigger>
+  <SelectContent position="popper" className="w-full">
+    {stations.map((station) => (
+      <SelectItem key={station._id} value={station._id}>
+        {station.name} - {station.location}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
+{/* Device - Optional */}
+<Select onValueChange={(val) => setDeviceId(val)}>
+  <SelectTrigger className="w-full">
+    <SelectValue placeholder="Select Device (Optional)" />
+  </SelectTrigger>
+  <SelectContent position="popper" className="w-full">
+    {devices.map((device) => (
+      <SelectItem key={device._id} value={device.deviceId}>
+        {device.deviceId} ({device.macId})
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
           </CardContent>
+
           <div className="mt-4 flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => {
-              setShowCreateForm(false);
-              setUsername(""); setEmail(""); setPassword(""); setRoleId(null); setStationId(null);
-            }}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreateForm(false);
+                setUsername("");
+                setEmail("");
+                setPassword("");
+                setRoleId(null);
+                setStationId(null);
+                setDeviceId(null);
+              }}
+            >
+              Cancel
+            </Button>
             <Button onClick={createUser}>Submit</Button>
           </div>
         </Card>
       )}
 
-      {/* Stats Boxes */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 text-center">
           <CardTitle>Total Users</CardTitle>
@@ -303,7 +373,6 @@ const ManageUsersPage: React.FC = () => {
           <CardTitle>Users</CardTitle>
           <CardDescription>Manage system users</CardDescription>
         </CardHeader>
-
         <CardContent className="overflow-x-auto">
           <Table className="min-w-full">
             <TableHeader>
@@ -321,27 +390,28 @@ const ManageUsersPage: React.FC = () => {
                 <TableRow key={user._id} className="hover:bg-gray-50 transition-colors">
                   <TableCell className="p-4 font-medium">{user.username}</TableCell>
                   <TableCell className="p-4">{user.email}</TableCell>
-                  <TableCell className="p-4">{roles.find(r => r.role_id === user.role_id)?.name || "N/A"}</TableCell>
                   <TableCell className="p-4">
-                    <Badge variant={user.status ? "default" : "secondary"} className={user.status ? "bg-green-100 text-green-800" : ""}>
+                    {roles.find((r) => r.role_id === user.role_id)?.name || "N/A"}
+                  </TableCell>
+                  <TableCell className="p-4">
+                    <Badge
+                      variant={user.status ? "default" : "secondary"}
+                      className={user.status ? "bg-green-100 text-green-800" : ""}
+                    >
                       {user.status ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                   <TableCell className="p-4">{new Date(user.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {/* View User */}
-                     <Button
-  variant="ghost"
-  size="sm"
-  className="p-2 hover:bg-gray-100 rounded"
-  onClick={() => fetchUserDetails(user.user_id, user)}
->
-  <Icon icon="mdi:eye" size={16} />
-</Button>
-
-
-                      {/* Edit Username */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-2 hover:bg-gray-100 rounded"
+                        onClick={() => fetchUserDetails(user.user_id, user)}
+                      >
+                        <Icon icon="mdi:eye" size={16} />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -350,12 +420,7 @@ const ManageUsersPage: React.FC = () => {
                       >
                         <Icon icon="mdi:pencil" size={16} />
                       </Button>
-
-                      {/* Toggle Status */}
-                      <Switch
-                        checked={user.status}
-                        onCheckedChange={() => toggleUserStatus(user._id, user.status)}
-                      />
+                      <Switch checked={user.status} onCheckedChange={() => toggleUserStatus(user._id, user.status)} />
                     </div>
                   </TableCell>
                 </TableRow>
