@@ -490,7 +490,7 @@ export default function MenuLevel() {
 
 useEffect(() => {
   if (currentPage === "Analytics") {
-    fetch('http://192.168.0.40:8070/analytics') // assuming endpoint
+    fetch('http://192.168.0.28:8070/analytics') // assuming endpoint
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {

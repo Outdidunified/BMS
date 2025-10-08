@@ -18,7 +18,8 @@ interface Station {
 	_id: string;
 	station_id: number;
 	status: boolean;
-	devices?: unknown;
+	devices?: string[];
+	assignments?: { user?: { id: string; user_id: string; email: string } }[];
 	warnings?: {
 		cellVoltage?: {
 			high?: number;
@@ -48,7 +49,11 @@ function ManageStationMaster() {
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [showAssignUsersDialog, setShowAssignUsersDialog] = useState(false);
-	const [deviceDialogStation, setDeviceDialogStation] = useState<Station | null>(null);
+
+
+const [showAssignControls, setShowAssignControls] = useState(false);
+const [showAssignUserControls, setShowAssignUserControls] = useState(false);
+
 
 
 
@@ -90,10 +95,19 @@ function ManageStationMaster() {
 	});
 	const [searchTerm, setSearchTerm] = useState("");
 	const [statusFilter, setStatusFilter] = useState<string>("all");
+	const [unassignedDevices, setUnassignedDevices] = useState([]);
+	const [unassignedUsers, setUnassignedUsers] = useState([]);
+	const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+	const [selectedUserId, setSelectedUserId] = useState<string>("");
 
-	// Fetch all stations on component mount
+	const selectedUserEmail =
+  unassignedUsers.find((u) => u.id === selectedUserId)?.email || "Select User";
+
+
+	// Fetch all stations and unassigned summary on component mount
 	useEffect(() => {
 		fetchStations();
+		fetchUnassignedSummary();
 	}, []);
 
 	const fetchStations = async () => {
@@ -110,11 +124,23 @@ function ManageStationMaster() {
 		}
 	};
 
+	const fetchUnassignedSummary = async () => {
+		try {
+			const response = await apiClient.get({
+				url: "/stations/unassignedSummary/",
+			});
+			setUnassignedDevices(response.unassignedDevices);
+			setUnassignedUsers(response.unassignUser || []);
+		} catch (error: any) {
+			console.error("Error fetching unassigned summary:", error);
+		}
+	};
+
 	// Filter stations based on search and filters
 	const filteredStations = stations.filter(station => {
 		const matchesSearch = station.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
 			station.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			(station.devices?.device_id || '').toLowerCase().includes(searchTerm.toLowerCase());
+			(Array.isArray(station.devices) && station.devices.some(device => device.toLowerCase().includes(searchTerm.toLowerCase()))) ;
 
 		const matchesStatus = statusFilter === "all" ||
 			(statusFilter === "active" && station.status === true) ||
@@ -425,24 +451,154 @@ const handleAddStation = async () => {
  }
 };
 
+const handleAssignDevice = async (station: Station) => {
+  if (!selectedDeviceId) {
+    Swal.fire("Error", "Please select a device to assign", "error");
+    return;
+  }
 
+  try {
+    setLoading(true);
+    await apiClient.post({
+      url: `/stations/assignDevice/${station._id}`,
+      data: { deviceId: selectedDeviceId },
+    });
 
-	const handleOpenDeviceDialog = (station: Station) => {
-		setDeviceDialogStation(station);
+    await Swal.fire({
+      title: "Success",
+      text: "Device assigned successfully",
+      icon: "success",
+      confirmButtonText: "OK",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+    });
+
+    setShowAssignControls(false);
+    setSelectedDeviceId("");
+    fetchStations();
+    fetchUnassignedSummary();
+  } catch (error: any) {
+    console.error("Error assigning device:", error);
+    Swal.fire("Error", error?.response?.data?.message || "Failed to assign device", "error");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleUnassignDevice = async ({
+  stationId,
+  deviceId,
+}: {
+  stationId: string;
+  deviceId: string;
+}) => {
+  if (!deviceId) {
+    Swal.fire("Error", "Device ID is required to unassign", "error");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    await apiClient.post({
+      url: `/stations/unassignDevice/${stationId}`,
+      data: { deviceId },
+    });
+
+    await Swal.fire({
+      title: "Success",
+      text: "Device unassigned successfully",
+      icon: "success",
+      confirmButtonText: "OK",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+    });
+
+    setShowAssignControls(false);
+    setSelectedDeviceId("");
+    fetchStations();
+    fetchUnassignedSummary();
+  } catch (error: any) {
+    console.error("Error unassigning device:", error);
+    Swal.fire("Error", error?.response?.data?.message || "Failed to unassign device", "error");
+  } finally {
+    setLoading(false);
+  }
+};
+	const handleAssignUser = async (station: Station) => {
+		if (!selectedUserId) {
+			Swal.fire("Error", "Please select a user to assign", "error");
+			return;
+		}
+	
+		try {
+			setLoading(true);
+			await apiClient.post({
+				url: `/stations/assignUser/${station._id}`,
+				data: { userId: selectedUserId },
+			});
+	
+			await Swal.fire({
+				title: "Success",
+				text: "User assigned successfully",
+				icon: "success",
+				confirmButtonText: "OK",
+				allowOutsideClick: false,
+				allowEscapeKey: false,
+			});
+	
+			setShowAssignUserControls(false);
+			setSelectedUserId("");
+			fetchStations();
+			fetchUnassignedSummary();
+		} catch (error: any) {
+			console.error("Error assigning user:", error);
+			Swal.fire("Error", error?.response?.data?.message || "Failed to assign user", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
-
-	const handleCloseDeviceDialog = () => {
-		setDeviceDialogStation(null);
+	
+	const handleUnassignUser = async ({
+		stationId,
+		userId,
+	}: {
+		stationId: string;
+		userId: string;
+	}) => {
+		if (!userId) {
+			Swal.fire("Error", "User ID is required to unassign", "error");
+			return;
+		}
+	
+		try {
+			setLoading(true);
+			await apiClient.post({
+				url: `/stations/unassignUser/${stationId}`,
+				data: { userId },
+			});
+	
+			await Swal.fire({
+				title: "Success",
+				text: "User unassigned successfully",
+				icon: "success",
+				confirmButtonText: "OK",
+				allowOutsideClick: false,
+				allowEscapeKey: false,
+			});
+	
+			setShowAssignUserControls(false);
+			setSelectedUserId("");
+			fetchStations();
+			fetchUnassignedSummary();
+		} catch (error: any) {
+			console.error("Error unassigning user:", error);
+			Swal.fire("Error", error?.response?.data?.message || "Failed to unassign user", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
-
-	const handleCloseAssignUsers = () => {
-		setShowAssignUsersDialog(false);
-	};
-
-	const handleViewWarnings = (station: Station) => {
-		setSelectedWarningsStation(station);
-		setTimeout(() => setViewWarningsModalOpen(true), 0);
-	};
+	
+	
 
 	const getStatusBadge = (status: boolean) => {
 		return (
@@ -452,80 +608,8 @@ const handleAddStation = async () => {
 		);
 	};
 
-	const computedDevices = useMemo(() => {
-		if (!deviceDialogStation?.devices) return [] as string[];
 
-		const devices = deviceDialogStation.devices;
 
-		if (Array.isArray(devices)) {
-			return devices
-				.map(device => (typeof device === "string" ? device : device?.device_id ?? ""))
-				.filter(Boolean);
-		}
-
-		if (typeof devices === "string") {
-			return [devices];
-		}
-
-		if (typeof devices === "object") {
-			const collected: string[] = [];
-			Object.values(devices).forEach(deviceValue => {
-				if (Array.isArray(deviceValue)) {
-					deviceValue.forEach(item => {
-						const id = typeof item === "string" ? item : item?.device_id;
-						if (id) collected.push(id);
-					});
-					return;
-				}
-				if (typeof deviceValue === "object" && deviceValue) {
-					const id = (deviceValue as Record<string, unknown>).device_id;
-					if (typeof id === "string") collected.push(id);
-					return;
-				}
-				if (typeof deviceValue === "string") {
-					collected.push(deviceValue);
-				}
-			});
-			return collected;
-		}
-
-		return [] as string[];
-	}, [deviceDialogStation]);
-
-	const renderDevicesButtonLabel = (station: Station) => {
-		if (!station.devices) return "N/A";
-		if (typeof station.devices === "string") return station.devices;
-
-		if (Array.isArray(station.devices)) {
-			const first = station.devices[0];
-			if (!first) return "N/A";
-			return typeof first === "string" ? first : first?.device_id ?? "N/A";
-		}
-
-		if (typeof station.devices === "object") {
-			if ("device_id" in station.devices) {
-				return (station.devices as Record<string, unknown>).device_id as string ?? "N/A";
-			}
-
-			const firstValue = Object.values(station.devices)[0];
-			if (!firstValue) return "N/A";
-
-			if (Array.isArray(firstValue)) {
-				const nestedFirst = firstValue[0];
-				return typeof nestedFirst === "string" ? nestedFirst : nestedFirst?.device_id ?? "N/A";
-			}
-
-			if (typeof firstValue === "object") {
-				return (firstValue as Record<string, unknown>).device_id as string ?? "N/A";
-			}
-
-			if (typeof firstValue === "string") {
-				return firstValue;
-			}
-		}
-
-		return "N/A";
-	};
 
 	return (
 		<div className="space-y-6">
@@ -541,10 +625,7 @@ const handleAddStation = async () => {
 				</div>
 				{isAdmin && (
 					<div className="flex flex-wrap items-center gap-2">
-						<Button onClick={handleAssignUsers} variant="outline" className="flex items-center gap-2">
-							<Icon icon="mdi:account-multiple-plus" size={16} />
-							Assign Users
-						</Button>
+					
 					<Button onClick={handleCreateStation} className="flex items-center gap-2">
   <Icon icon="mdi:plus" size={16} />
   Create Station
@@ -688,7 +769,8 @@ const handleAddStation = async () => {
     <TableRow>
       <TableHead>Station</TableHead>
       <TableHead>Location</TableHead>
-      <TableHead>Device ID</TableHead>
+      <TableHead>Assigned Devices</TableHead>
+	  <TableHead> Assigned Users</TableHead>
       <TableHead>Status</TableHead>
       <TableHead className="text-right">Actions</TableHead>
     </TableRow>
@@ -724,7 +806,7 @@ const handleAddStation = async () => {
           )}
         </TableCell>
 
-{/* Device ID */}
+ {/* Assign devices */}
 <TableCell>
   <Dialog>
     <DialogTrigger asChild>
@@ -733,76 +815,245 @@ const handleAddStation = async () => {
         size="sm"
         title="View devices"
         className="text-green-600 hover:text-blue-700 hover:bg-blue-50"
+        onClick={() => {
+          setSelectedDeviceId("");
+          setShowAssignControls(false);
+        }}
       >
         View Devices
       </Button>
     </DialogTrigger>
 
     <DialogContent className="sm:max-w-[600px]">
-   <DialogHeader className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-  <div>
-    <DialogTitle>Device Data</DialogTitle>
-    <DialogDescription>
-      List of device IDs for this station.
-    </DialogDescription>
-  </div>
+      <DialogHeader className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <DialogTitle>Device Data</DialogTitle>
+          <DialogDescription>
+            List of device IDs for this station.
+          </DialogDescription>
+        </div>
 
-  <div className="flex items-center gap-3 pr-6"> {/* space before built-in close icon */}
-    {/* Assign Device button */}
-    <Button
-      variant="outline"
-      size="sm"
-      className="border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800"
-    >
-      Assign Device to this Station
-    </Button>
-  </div>
-</DialogHeader>
+        <div className="flex items-center gap-3 pr-6">
+          {/* Step 1: Show Assign button initially */}
+          {!showAssignControls ? (
+          <Button
+  autoFocus
+  onClick={() => setShowAssignControls(true)}
+  size="sm"
+  className="border border-green-600 text-green-700 bg-transparent hover:bg-green-50 hover:text-green-800 focus-visible:ring-1 focus-visible:ring-green-600"
+>
+  Assign Device to this Station
+</Button>
 
+          ) : (
+            <>
+              {/* Step 2: Show Select dropdown */}
+              <Select
+                value={selectedDeviceId}
+                onValueChange={setSelectedDeviceId}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Device ID" />
+                </SelectTrigger>
+                <SelectContent>
+                  {unassignedDevices.map((device) => (
+                    <SelectItem key={device._id} value={device.deviceId}>
+                      {device.deviceId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
+              {/* Step 3: Done button - enabled only when a device is selected */}
+  <Button
+  onClick={() => handleAssignDevice(station)}
+  size="sm"
+  disabled={!selectedDeviceId}
+  className={`border border-green-600 text-green-700 bg-transparent hover:bg-green-50 hover:text-green-800 focus-visible:ring-1 focus-visible:ring-green-600 ${
+    !selectedDeviceId ? "opacity-50 cursor-not-allowed" : ""
+  }`}
+>
+  Done
+</Button>
+
+            </>
+          )}
+        </div>
+      </DialogHeader>
 
       {/* Device List */}
-      {station.devices && Object.keys(station.devices).length > 0 ? (
-        Array.isArray(station.devices) ? (
-          station.devices.map((device, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50"
-            >
-              <span className="text-gray-800 font-medium">
-                Device ID:{" "}
-                <span className="text-gray-600">{device.device_id || "-"}</span>
-              </span>
+     {/* Device List */}
+{station.devices && station.devices.length > 0 ? (
+  Array.isArray(station.devices) ? (
+    station.devices.map((deviceId, index) => (
+      <div
+        key={index}
+        className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50"
+      >
+        <span className="text-gray-800 font-medium">
+          Device ID:{" "}
+          <span className="text-gray-600">{deviceId || "-"}</span>
+        </span>
 
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+          onClick={() =>
+            handleUnassignDevice({
+              stationId: station._id,
+              deviceId: deviceId, // directly pass string now
+            })
+          }
+          disabled={!deviceId}
+        >
+          Unassign Device
+        </Button>
+      </div>
+    ))
+  ) : (
+    <div className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50">
+      <span className="text-gray-800 font-medium">
+        Device ID:{" "}
+        <span className="text-gray-600">{station.devices || "-"}</span>
+      </span>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+        onClick={() =>
+          handleUnassignDevice({
+            stationId: station._id,
+            deviceId: station.devices || "",
+          })
+        }
+        disabled={!station.devices}
+      >
+        Unassign Device
+      </Button>
+    </div>
+  )
+) : (
+  <div className="text-center text-gray-500 py-4">
+    No device details available.
+  </div>
+)}
+
+    </DialogContent>
+  </Dialog>
+</TableCell>
+
+ {/* Assign users */}
+<TableCell>
+  <Dialog>
+    <DialogTrigger asChild>
+      <Button
+        variant="ghost"
+        size="sm"
+        title="View users"
+        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+        onClick={() => {
+          setShowAssignUserControls(false);
+          setSelectedUserId("");
+        }}
+      >
+        View Users
+      </Button>
+    </DialogTrigger>
+
+    <DialogContent className="sm:max-w-[600px]">
+      <DialogHeader className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <DialogTitle>User Assignment</DialogTitle>
+          <DialogDescription>
+            Assign and manage users for this station.
+          </DialogDescription>
+        </div>
+
+        <div className="flex items-center gap-3 pr-6">
+          {/* Step 1: Show Assign button initially */}
+          {!showAssignUserControls ? (
+            <Button
+              autoFocus
+              onClick={() => setShowAssignUserControls(true)}
+              size="sm"
+              className="border border-green-600 text-green-700 bg-transparent hover:bg-green-50 hover:text-green-800 focus-visible:ring-1 focus-visible:ring-green-600"
+            >
+              Assign User to this Station
+            </Button>
+          ) : (
+            <>
+              {/* Step 2: Show Select dropdown */}
+<Select
+  value={selectedUserId}
+  onValueChange={(value) => {
+    setSelectedUserId(value);
+  }}
+>
+  <SelectTrigger className="w-48">
+    <SelectValue placeholder="Select User">{selectedUserId ? selectedUserEmail : undefined}</SelectValue>
+  </SelectTrigger>
+  <SelectContent>
+    {unassignedUsers.map((user) => (
+      <SelectItem key={user.id} value={user.id}>
+        {user.email}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
+
+
+              {/* Step 3: Done button */}
               <Button
-                variant="outline"
+                onClick={() => handleAssignUser(station)}
                 size="sm"
-                className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+                disabled={!selectedUserId}
+                className={`border border-green-600 text-green-700 bg-transparent hover:bg-green-50 hover:text-green-800 focus-visible:ring-1 focus-visible:ring-green-600 ${
+                  !selectedUserId ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
-                Unassign Device
+                Done
               </Button>
-            </div>
-          ))
-        ) : (
-          <div className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50">
+            </>
+          )}
+        </div>
+      </DialogHeader>
+
+      {/* ✅ Assigned Users List */}
+      {station.assignments && station.assignments.length > 0 ? (
+        station.assignments.map((assignment, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between border rounded p-3 my-2 bg-gray-50"
+          >
             <span className="text-gray-800 font-medium">
-              Device ID:{" "}
+              User:{" "}
               <span className="text-gray-600">
-                {station.devices.device_id || "-"}
+                {assignment.user?.email || "-"}
               </span>
             </span>
+
             <Button
               variant="outline"
               size="sm"
               className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={() =>
+                handleUnassignUser({
+                  stationId: station._id,
+                  userId: assignment.user?.user_id ?? "",
+                })
+              }
+              disabled={!assignment.user?.user_id}
             >
-              Unassign Device
+              Unassign User
             </Button>
           </div>
-        )
+        ))
       ) : (
         <div className="text-center text-gray-500 py-4">
-          No device details available.
+          No users assigned.
         </div>
       )}
     </DialogContent>
