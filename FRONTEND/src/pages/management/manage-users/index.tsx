@@ -118,7 +118,7 @@ const ManageUsersPage: React.FC = () => {
 
   const fetchUnassignedSummary = async () => {
     try {
-      const res = await axios.get(`http://192.168.0.28:8070/stations/unassignedSummary/`, { headers });
+      const res = await axios.get(`${API_BASE_URL}/stations/unassignedSummary/`, { headers });
       if (res.data.success) {
         setStations(res.data.data.unassignedStations || []);
         setDevices(res.data.data.unassignedDevices || []);
@@ -223,7 +223,7 @@ const ManageUsersPage: React.FC = () => {
     if (!userId && !user) return;
 
     try {
-      const res = await axios.get(`http://192.168.0.28:8070/auth/getProfile`, {
+      const res = await axios.get(`${API_BASE_URL}/auth/getProfile`, {
         params: { userId: userId || user?.user_id },
         headers,
       });
