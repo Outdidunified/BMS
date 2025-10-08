@@ -97,27 +97,42 @@ const ManageUsersPage: React.FC = () => {
     }
   };
 
-  const createUser = async () => {
-    if (!username || !email || !password || !roleId || !stationId) {
-      Swal.fire("Error", "Please fill all fields", "error");
-      return;
+ const createUser = async () => {
+  if (!username || !email || !password || !roleId) {
+    Swal.fire("Error", "Please fill all required fields", "error");
+    return;
+  }
+
+  try {
+    const payload: any = {
+      username,
+      email,
+      password,
+      role_id: roleId,
+    };
+
+    // only include station_id if selected
+    if (stationId) payload.station_id = stationId;
+
+    const res = await axios.post(`${API_BASE_URL}/auth/CreateUser/`, payload, { headers });
+
+    if (res.data.success) {
+      Swal.fire("Success", res.data.message, "success");
+      fetchUsers();
+      setShowCreateForm(false);
+
+      // reset form
+      setUsername("");
+      setEmail("");
+      setPassword("");
+      setRoleId(null);
+      setStationId(null);
     }
-    try {
-      const res = await axios.post(
-        `${API_BASE_URL}/auth/CreateUser/`,
-        { username, email, password, role_id: roleId, station_id: stationId },
-        { headers }
-      );
-      if (res.data.success) {
-        Swal.fire("Success", res.data.message, "success");
-        fetchUsers();
-        setShowCreateForm(false);
-        setUsername(""); setEmail(""); setPassword(""); setRoleId(null); setStationId(null);
-      }
-    } catch (err: any) {
-      Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
-    }
-  };
+  } catch (err: any) {
+    Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
+  }
+};
+
 
   const handleEditUser = (user: User) => {
     Swal.fire({
@@ -184,7 +199,7 @@ const ManageUsersPage: React.FC = () => {
   if (!userId && !user) return;
 
   try {
-    const res = await axios.get(`http://192.168.0.35:8070/auth/getProfile`, {
+    const res = await axios.get(`http://192.168.0.40:8070/auth/getProfile`, {
       params: { userId: userId || user?.user_id },
       headers
     });

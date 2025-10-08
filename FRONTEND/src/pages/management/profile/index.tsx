@@ -24,7 +24,7 @@ function UserProfile() {
   const [editMode, setEditMode] = useState<boolean>(false);
   const [formData, setFormData] = useState({ username: "", password: "" });
 
-  const API_BASE = "http://192.168.0.35:8070";
+  const API_BASE = "http://192.168.0.40:8070";
 
   useEffect(() => {
     fetchProfile();
@@ -140,7 +140,7 @@ function UserProfile() {
                 color={themeVars.colors.palette.primary.default}
               />
             </div>
-            <Text variant="body2">{userData?.role_id ? getRoleName(userData.role_id) : "User"}</Text>
+            {/* <Text variant="body2">{userData?.role_id ? getRoleName(userData.role_id) : "User"}</Text> */}
           </div>
         </div>
         <TabsList className="z-5">
