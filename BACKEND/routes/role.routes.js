@@ -15,11 +15,11 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireRole('superadmin'));
 
-router.get('/', getAllRoles);
-router.get('/active', getActiveRoles);
-router.get('/:id', getRoleById);
-router.post('/', createRole);
-router.put('/:id', updateRole);
-router.delete('/:id', deleteRole);
+router.get('/getRoles', getAllRoles);
+router.get('/getActiveRoles', getActiveRoles);
+router.get('/getRole/:id', getRoleById);
+router.post('/createRole', createRole);
+router.put('/updateRole/:id', updateRole);
+router.delete('/deleteRole/:id', deleteRole);
 
 export default router;

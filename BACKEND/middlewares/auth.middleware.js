@@ -18,7 +18,7 @@ export const authenticate = async (req, res, next) => {
 
         const db = getDb();
         const userModel = new User(db);
-        const user = await userModel.findById(decoded.id);
+        const user = await userModel.findById(decoded.id) || await userModel.findByUserId(decoded.user_id);
 
         if (!user) {
             return res.fail('User not found', 401);
@@ -32,11 +32,41 @@ export const authenticate = async (req, res, next) => {
             return res.fail('Role not found', 401);
         }
 
+        const { password, ...userWithoutPassword } = user;
+
+        const normalizedStationIds = Array.isArray(user.stations)
+            ? Array.from(
+                new Set(
+                    user.stations
+                        .filter(Boolean)
+                        .map(stationRef => stationRef.toString())
+                )
+            )
+            : [];
+
+        let primaryStationId = null;
+
+        if (user.station_id) {
+            primaryStationId = user.station_id.toString();
+        }
+
+        if (!primaryStationId && normalizedStationIds.length) {
+            primaryStationId = normalizedStationIds[0];
+        }
+
+        if (primaryStationId && !normalizedStationIds.includes(primaryStationId)) {
+            normalizedStationIds.unshift(primaryStationId);
+        }
+
         req.user = {
-            ...user,
+            ...userWithoutPassword,
+            user_id: user.user_id,
             role: role.name,
-            permissions: role.permissions
+            permissions: role.permissions,
+            station_id: primaryStationId,
+            stations: normalizedStationIds,
         };
+
         next();
     } catch (error) {
         logger.loggerError(`Auth middleware error: ${error.message}`);
@@ -57,7 +87,7 @@ export const authorize = (...requiredPermissions) => {
 
         // Check if user has all required permissions
         const hasPermission = requiredPermissions.every(permission =>
-            req.user.permissions.includes(permission)
+            req.user.permissions[permission] === true
         );
 
         if (!hasPermission) {

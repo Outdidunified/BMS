@@ -6,6 +6,7 @@ import {
     updateUser,
     deleteUser,
     getProfile,
+    updateProfile,
 } from '../controllers/auth.controller.js';
 import { authenticate, authorize, requireRole } from '../middlewares/auth.middleware.js';
 
@@ -16,9 +17,10 @@ router.post('/register', register); // Only for initial setup or by super_admin
 router.post('/login', login);
 
 // Protected routes
-router.get('/profile', authenticate, getProfile);
-router.get('/users', authenticate, requireRole('superadmin'), getUsers);
-router.put('/users/:id', authenticate, requireRole('superadmin'), updateUser);
-router.delete('/users/:id', authenticate, requireRole('superadmin'), deleteUser);
+router.get('/getProfile', authenticate, getProfile);
+router.put('/updateProfile', authenticate, updateProfile);
+router.get('/getUsers', authenticate, requireRole('superadmin'), getUsers);
+router.put('/updateUser/:id', authenticate, requireRole('superadmin'), updateUser);
+router.delete('/deleteUser/:id', authenticate, requireRole('superadmin'), deleteUser);
 
 export default router;

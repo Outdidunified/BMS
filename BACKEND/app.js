@@ -11,6 +11,8 @@ import notificationsRoutes from './routes/notifications.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import telemetryRoutes from './routes/telemetry.routes.js';
 import dataRoutes from './routes/data.routes.js';
+import stationRoutes from './routes/station.routes.js';
+import warningRoutes from './routes/warning.routes.js';
 import { setupWebSocket, broadcast } from './Websocket/hub.js';
 import logger from './utils/logger.js';
 import responseFormatter from './middlewares/response.js';
@@ -54,6 +56,7 @@ apiApp.get('/docs', (_req, res) => {
                 register: 'POST /auth/register',
                 login: 'POST /auth/login',
                 profile: 'GET /auth/profile?userId=<optional_user_id>',
+                updateProfile: 'PUT /auth/profile',
                 getUsers: 'GET /auth/users',
                 updateUser: 'PUT /auth/users/:id',
                 deleteUser: 'DELETE /auth/users/:id',
@@ -92,6 +95,22 @@ apiApp.get('/docs', (_req, res) => {
                 range: 'GET /telemetry/range?di=&from=&to=&limit=',
                 batteryStateReport: 'GET /telemetry/battery-state-report?di=&from=&to=&page=&pageSize=',
             },
+            stations: {
+                base: '/stations',
+                getAll: 'GET /stations',
+                get: 'GET /stations/:id',
+                create: 'POST /stations',
+                update: 'PUT /stations/:id',
+                delete: 'DELETE /stations/:id',
+                assignDevice: 'POST /stations/:id/devices',
+                getDevices: 'GET /stations/:id/devices',
+            },
+            warnings: {
+                base: '/warnings',
+                get: 'GET /warnings?deviceId=',
+                upsert: 'POST /warnings',
+                delete: 'DELETE /warnings/:id',
+            },
             ingest: {
                 health: `GET http://host:${INGEST_PORT}/health`,
                 post: `POST http://host:${INGEST_PORT}/data`,
@@ -109,6 +128,8 @@ apiApp.use('/devices', devicesRoutes);
 apiApp.use('/notifications', notificationsRoutes);
 apiApp.use('/analytics', analyticsRoutes);
 apiApp.use('/telemetry', telemetryRoutes);
+apiApp.use('/stations', stationRoutes);
+apiApp.use('/warnings', warningRoutes);
 
 // Ingestion server (for devices)
 const ingestApp = express();
@@ -134,13 +155,31 @@ async function start() {
         const requiredRoles = [
             {
                 name: 'superadmin',
-                permissions: ['manage_users', 'view_devices', 'manage_devices', 'view_telemetry', 'view_analytics', 'manage_notifications'],
+                permissions: {
+                    manage_users: true,
+                    manage_stations: true,
+                    manage_devices: true,
+                    view_devices: true,
+                    view_telemetry: true,
+                    view_analytics: true,
+                    manage_notifications: true,
+                    manage_warnings: true
+                },
                 status: true,
                 role_id: 1
             },
             {
                 name: 'stationmaster',
-                permissions: ['view_devices', 'view_telemetry'],
+                permissions: {
+                    manage_users: false,
+                    manage_stations: false,
+                    manage_devices: false,
+                    view_devices: true,
+                    view_telemetry: true,
+                    view_analytics: false,
+                    manage_notifications: false,
+                    manage_warnings: true
+                },
                 status: true,
                 role_id: 2
             }
@@ -170,10 +209,18 @@ async function start() {
                 role_id: superAdminRole.role_id,
             });
             logger.loggerInfo(`Superadmin user created: ${superAdmin.username}`);
-        } else if (typeof existingAdmin.role_id !== 'number') {
-            // Update existing admin to use new role_id if needed
-            await userModel.update(existingAdmin._id.toString(), { role_id: superAdminRole.role_id });
-            logger.loggerInfo('Superadmin user updated with new role_id');
+        } else {
+            const updates = {};
+            if (typeof existingAdmin.role_id !== 'number') {
+                updates.role_id = superAdminRole.role_id;
+            }
+            if (!existingAdmin.user_id) {
+                updates.user_id = (await import('crypto')).randomUUID();
+            }
+            if (Object.keys(updates).length > 0) {
+                await userModel.update(existingAdmin._id.toString(), updates);
+                logger.loggerInfo('Superadmin user updated with missing fields');
+            }
         }
     } catch (error) {
         logger.loggerError(`Setup failed: ${error.message}`);

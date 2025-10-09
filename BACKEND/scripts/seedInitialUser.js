@@ -51,10 +51,17 @@ async function seedInitialData() {
         // Check if super admin already exists
         const existingAdmin = await userModel.findByUsername('superadmin');
         if (existingAdmin) {
-            // Update existing admin to use new role_id if needed
+            const updates = {};
             if (typeof existingAdmin.role_id !== 'number') {
-                await userModel.update(existingAdmin._id.toString(), { role_id: superAdminRole.role_id });
-                logger.loggerInfo('Super admin user updated with new role_id');
+                updates.role_id = superAdminRole.role_id;
+            }
+            if (!existingAdmin.user_id) {
+                updates.user_id = (await import('crypto')).randomUUID();
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await userModel.update(existingAdmin._id.toString(), updates);
+                logger.loggerInfo('Super admin user updated with missing fields');
             } else {
                 logger.loggerInfo('Super admin user already exists');
             }

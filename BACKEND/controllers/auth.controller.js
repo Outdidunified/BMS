@@ -10,7 +10,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export const register = async (req, res) => {
     try {
-        const { username, email, password, role_id } = req.body;
+        const { username, email, password, role_id, station_id } = req.body;
 
         if (!username || !email || !password) {
             return res.fail('Username, email, and password are required', 400);
@@ -58,10 +58,12 @@ export const register = async (req, res) => {
             email,
             password: password, // Plain text
             role_id: Number(userRoleId),
+            station_id: station_id ? new (await import('mongodb')).ObjectId(station_id) : undefined,
         });
 
         // Don't return password
         const { password: _, ...userWithoutPassword } = newUser;
+        userWithoutPassword.user_id = newUser.user_id;
 
         logger.loggerInfo(`User ${username} registered successfully`);
         res.ok(userWithoutPassword, 'User created successfully');
@@ -94,12 +96,18 @@ export const login = async (req, res) => {
 
         // Generate JWT
         const token = jwt.sign(
-            { id: user._id.toString(), email: user.email, username: user.username },
+            {
+                id: user._id.toString(),
+                email: user.email,
+                username: user.username,
+                user_id: user.user_id,
+            },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
         );
 
         const { password: _, ...userWithoutPassword } = user;
+        userWithoutPassword.user_id = user.user_id;
 
         logger.loggerInfo(`User ${user.username} logged in`);
         res.ok(
@@ -195,6 +203,43 @@ export const deleteUser = async (req, res) => {
     }
 };
 
+export const updateProfile = async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        const userId = req.user._id.toString();
+
+        const db = getDb();
+        const userModel = new User(db);
+
+        const updateData = {};
+        if (username) updateData.username = username;
+        if (password) updateData.password = password; // plain text
+        if (email) {
+            // Check email uniqueness
+            const existingEmail = await userModel.findByEmail(email);
+            if (existingEmail && existingEmail._id.toString() !== userId) {
+                return res.fail('Email already exists', 400);
+            }
+            updateData.email = email;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return res.fail('No fields to update', 400);
+        }
+
+        const success = await userModel.update(userId, updateData);
+        if (!success) {
+            return res.fail('Update failed', 500);
+        }
+
+        logger.loggerInfo(`Profile updated for user ${userId}`);
+        res.ok({}, 'Profile updated successfully');
+    } catch (error) {
+        logger.loggerError(`Update profile error: ${error.message}`);
+        res.fail('Internal server error', 500);
+    }
+};
+
 export const getProfile = async (req, res) => {
     try {
         const { userId } = req.query;
@@ -220,6 +265,7 @@ export const getProfile = async (req, res) => {
             }
 
             const { password, ...userWithoutPassword } = user;
+            userWithoutPassword.user_id = user.user_id;
             const profileData = {
                 ...userWithoutPassword,
                 role: role.name,

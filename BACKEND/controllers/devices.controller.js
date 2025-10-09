@@ -1,5 +1,51 @@
+import { ObjectId } from 'mongodb';
 import Device from '../data/Device.model.js';
 import logger from '../utils/logger.js';
+
+const RESTRICTED_ROLES = new Set(['station muster role 2']);
+
+function buildStationScope(user) {
+    if (!user) {
+        return [];
+    }
+
+    const assignedStations = Array.isArray(user.assigned_station_ids)
+        ? user.assigned_station_ids
+            .map(entry => {
+                try {
+                    return new ObjectId(entry.assignmentId);
+                } catch (error) {
+                    logger.loggerWarn(`Invalid assignmentId encountered while building station scope: ${entry?.assignmentId}`);
+                    return null;
+                }
+            })
+            .filter(Boolean)
+        : [];
+
+    const directStations = Array.isArray(user.stations)
+        ? user.stations
+            .map(stationId => {
+                try {
+                    return new ObjectId(stationId);
+                } catch (error) {
+                    logger.loggerWarn(`Invalid station reference encountered while building station scope: ${stationId}`);
+                    return null;
+                }
+            })
+            .filter(Boolean)
+        : [];
+
+    const scope = new Set([
+        ...assignedStations.map(id => id.toString()),
+        ...directStations.map(id => id.toString()),
+    ]);
+
+    if (user.station_id) {
+        scope.add(user.station_id.toString());
+    }
+
+    return Array.from(scope).map(id => new ObjectId(id));
+}
 
 export async function createDevice(req, res) {
     try {

@@ -51,7 +51,7 @@ export const createRole = async (req, res) => {
 
         const roleData = {
             name,
-            permissions: permissions || [],
+            permissions: permissions || {},
             status: status !== undefined ? status : true
         };
 
