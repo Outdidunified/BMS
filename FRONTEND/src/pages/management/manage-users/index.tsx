@@ -363,6 +363,7 @@ const ManageUsersPage: React.FC = () => {
 </Select>
 
 {/* Device - Optional */}
+{/* Device - Optional */}
 <Select onValueChange={(val) => setDeviceId(val)}>
   <SelectTrigger className="w-full">
     <SelectValue placeholder="Select Device (Optional)" />
@@ -370,11 +371,12 @@ const ManageUsersPage: React.FC = () => {
   <SelectContent position="popper" className="w-full">
     {devices.map((device) => (
       <SelectItem key={device._id} value={device.deviceId}>
-        {device.deviceId} ({device.macId})
+        {device.deviceId}
       </SelectItem>
     ))}
   </SelectContent>
 </Select>
+
 
           </CardContent>
 

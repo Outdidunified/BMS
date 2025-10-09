@@ -14,6 +14,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		{ path: "manage-roles", element: Component("/pages/management/manage-roles") },
 		{ path: "manage-users", element: Component("/pages/management/manage-users") },
 		{ path: "manage-station-master", element: Component("/pages/management/manage-station-master") },
+		{ path: "manage-station-warnings", element: Component("/pages/management/manage-station-warnings") },
 		{ path: "profile", element: Component("/pages/management/profile") },
 
 		{

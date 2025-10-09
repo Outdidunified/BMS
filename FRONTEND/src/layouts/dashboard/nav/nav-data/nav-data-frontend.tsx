@@ -19,6 +19,7 @@ const getRoleId = (): number | null => {
 export const getFrontendNavData = (): NavProps["data"] => {
 	const roleId = getRoleId();
 	const isAdmin = roleId === 1;
+	const isStationManager = roleId === 2;
 
 	const baseItems = [
 		{
@@ -66,6 +67,14 @@ export const getFrontendNavData = (): NavProps["data"] => {
 		},
 	];
 
+	const stationManagerItems = [
+		{
+			title: "Manage Station & warnings",
+			path: "/manage-station-warnings",
+			icon: <Icon icon="mdi:office-building" size="24" />,
+		},
+	];
+
 	const profileItem = {
 		title: "Profile",
 		path: "/profile",
@@ -75,6 +84,9 @@ export const getFrontendNavData = (): NavProps["data"] => {
 	const items = [...baseItems];
 	if (isAdmin) {
 		items.push(...adminItems);
+	}
+	if (isStationManager) {
+		items.push(...stationManagerItems);
 	}
 	items.push(profileItem);
 

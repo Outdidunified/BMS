@@ -9,7 +9,8 @@ import Swal from 'sweetalert2';
 import { useDeviceWebSocket } from "@/hooks/useDeviceWebSocket";
 import devicesService from "@/api/services/devicesService";
 import telemetryService from "@/api/services/telemetryService";
-import { Wifi } from "lucide-react"; 
+import { Wifi } from "lucide-react";
+import * as XLSX from 'xlsx'; 
 
 
 // No static data - all data will come from API and WebSocket
@@ -60,25 +61,37 @@ export default function MenuLevel() {
   const [historicalData, setHistoricalData] = useState([]);
   const [events, setEvents] = useState([]);
   const [toastAlerts, setToastAlerts] = useState([]);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [warningHistory, setWarningHistory] = useState<any[]>([]);
+  const [showWarningsModal, setShowWarningsModal] = useState(false);
+  const [isLoadingWarnings, setIsLoadingWarnings] = useState(false);
   const maxHistoryPoints = 50; // Keep last 50 data points for trends
   const logsContainerRef = useRef(null);
+  const alertIdCounter = useRef(0); // For unique alert IDs
 
   // Device mapping for quick lookup
   const deviceMap = useMemo(() => new Map(liveData.map(d => [d.deviceId, d])), [liveData]);
+
+  // Selected device and its warnings
+  const selectedDevice = liveData.find(d => d.deviceId === selectedDeviceId);
+  const warnings = selectedDevice?.warningSettings;
 
   // Load devices from API
   useEffect(() => {
     const loadDevices = async () => {
       try {
         console.log('Fetching devices from API...');
-        const devices = await devicesService.listDevices(true);
-        console.log('Devices fetched:', devices);
+        const response = await devicesService.listDevices(true);
+        console.log('Devices fetched:', response);
+        const devices = Array.isArray(response) ? response : response?.data || [];
         if (devices && Array.isArray(devices)) {
           console.log(`Processing ${devices.length} devices`);
           setLiveData(devices.map(d => ({
             deviceId: d.deviceId,
             batteryId: d.batteryId,
             connected: d.connected || false,
+            stationDetails: d.stationDetails,
+            warningSettings: d.warningSettings,
             telemetry: { packVoltage: 0, current: 0, temperatures: [], voltages: [] },
             chartData: []
           })));
@@ -103,7 +116,7 @@ export default function MenuLevel() {
   // Helper function to add events
   const addEvent = useCallback((type, detail, severity = 'warning') => {
     const event = {
-      id: Date.now(),
+      id: ++alertIdCounter.current,
       type,
       detail,
       severity,
@@ -113,12 +126,87 @@ export default function MenuLevel() {
 
     // Add toast alert for critical events
     if (severity === 'error') {
-      setToastAlerts(prev => [event, ...prev.slice(0, 4)]); // Keep last 5 toast alerts
+      setToastAlerts(prev => [event, ...prev.slice(0, 2)]); // Keep last 3 toast alerts
       setTimeout(() => {
         setToastAlerts(prev => prev.filter(a => a.id !== event.id));
       }, 10000); // Remove after 10 seconds
     }
   }, []);
+
+  // Function to fetch warning history
+  const fetchWarningHistory = async () => {
+    if (!selectedDeviceId || !selectedDevice) {
+      Swal.fire('Error', 'No device selected', 'error');
+      return;
+    }
+    setIsLoadingWarnings(true);
+    try {
+      const stationId = selectedDevice.stationDetails?._id;
+      const token = sessionStorage.getItem("authToken") || sessionStorage.getItem("token");
+      const response = await fetch(`${import.meta.env.VITE_APP_API_BASE_URL}/warnings/history?deviceId=${selectedDeviceId}&stationId=${stationId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setWarningHistory(data.data.warnings);
+        setShowWarningsModal(true);
+      } else {
+        Swal.fire('Error', 'Failed to fetch warning history', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to fetch warning history:', error);
+      Swal.fire('Error', 'Failed to fetch warning history', 'error');
+    } finally {
+      setIsLoadingWarnings(false);
+    }
+  };
+
+  // Function to export warning history to Excel
+  const exportToExcel = () => {
+    if (warningHistory.length === 0) {
+      Swal.fire('No Data', 'No warning history to export', 'info');
+      return;
+    }
+
+    // Prepare data for Excel
+    const excelData = warningHistory.map(warning => ({
+      'Parameter': warning.parameter || '',
+      'Type': warning.type || '',
+      'Value': warning.value || '',
+      'Threshold': warning.threshold || '',
+      'Message': warning.message || '',
+      'Timestamp': warning.timestamp ? new Date(warning.timestamp).toLocaleString() : '',
+      'Resolved': warning.resolved ? 'Yes' : 'No'
+    }));
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Auto-size columns
+    const colWidths = [
+      { wch: 15 }, // Parameter
+      { wch: 10 }, // Type
+      { wch: 10 }, // Value
+      { wch: 12 }, // Threshold
+      { wch: 30 }, // Message
+      { wch: 20 }, // Timestamp
+      { wch: 10 }  // Resolved
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Warning History');
+
+    // Generate filename with device ID and date
+    const filename = `Warning_History_${selectedDeviceId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Save file
+    XLSX.writeFile(wb, filename);
+  };
 
   // Memoized WebSocket message handler
   const handleWebSocketMessage = useCallback((msg) => {
@@ -203,7 +291,7 @@ export default function MenuLevel() {
 
   // WebSocket connection for live data
   const { connected: wsConnected, send: wsSend } = useDeviceWebSocket({
-    url: "ws://192.168.0.35:8071",
+    url: import.meta.env.VITE_APP_WS_BASE_URL,
     reconnect: true,
     reconnectDelayMs: 2000,
     onMessage: handleWebSocketMessage,
@@ -258,6 +346,8 @@ export default function MenuLevel() {
     setLastLiveUpdate(0);
     setHistoricalData([]);
     setIsLoadingDevice(true);
+    setShowWarningsModal(false); // Hide warning history when device changes
+    setToastAlerts([]); // Clear toast alerts when device changes
     const timeout = setTimeout(() => setIsLoadingDevice(false), 10000); // Stop loading after 10 seconds if no data
     return () => clearTimeout(timeout);
   }, [selectedDeviceId]);
@@ -294,6 +384,8 @@ export default function MenuLevel() {
     const prevParams = historicalData[historicalData.length - 2] || {};
 
     // Voltage alerts and spike detection
+    const highVolt = warnings?.cellVoltage?.high ?? 4.2;
+    const lowVolt = warnings?.cellVoltage?.low ?? 3.0;
     for (let i = 1; i <= 24; i++) {
       const v = Number(params[`v${i}`]);
       const prevV = Number(prevParams[`v${i}`]) || v;
@@ -301,13 +393,13 @@ export default function MenuLevel() {
       // Only process if we have valid voltage values
       if (!isFinite(v) || v === 0) continue;
 
-      if (v > 4.2) {
+      if (v > highVolt) {
         a.push({ type: 'High Voltage', detail: `Cell v${i} = ${v.toFixed(2)}V`, severity: 'error' });
-        addEvent('Over Voltage', `Cell v${i} exceeded 4.2V: ${v.toFixed(2)}V`, 'error');
+        addEvent('Over Voltage', `Cell v${i} exceeded ${highVolt}V: ${v.toFixed(2)}V`, 'error');
       }
-      if (v < 3.0 && v > 0) {
+      if (v < lowVolt && v > 0) {
         a.push({ type: 'Low Voltage', detail: `Cell v${i} = ${v.toFixed(2)}V`, severity: 'error' });
-        addEvent('Under Voltage', `Cell v${i} below 3.0V: ${v.toFixed(2)}V`, 'error');
+        addEvent('Under Voltage', `Cell v${i} below ${lowVolt}V: ${v.toFixed(2)}V`, 'error');
       }
 
       // Voltage spike detection
@@ -317,6 +409,8 @@ export default function MenuLevel() {
     }
 
     // Temperature alerts and variance detection
+    const highTemp = warnings?.temperature?.high ?? 60;
+    const lowTemp = warnings?.temperature?.low ?? 0;
     for (let i = 1; i <= 25; i++) {
       const t = Number(params[`T${i}`]);
       const prevT = Number(prevParams[`T${i}`]) || t;
@@ -324,13 +418,13 @@ export default function MenuLevel() {
       // Only process if we have valid temperature values
       if (!isFinite(t)) continue;
 
-      if (t > 60) {
+      if (t > highTemp) {
         a.push({ type: 'High Temperature', detail: `Sensor T${i} = ${t.toFixed(1)}°C`, severity: 'error' });
-        addEvent('Over Temperature', `Sensor T${i} exceeded 60°C: ${t.toFixed(1)}°C`, 'error');
+        addEvent('Over Temperature', `Sensor T${i} exceeded ${highTemp}°C: ${t.toFixed(1)}°C`, 'error');
       }
-      if (t < 0 && t !== 0) {
+      if (t < lowTemp && t !== 0) {
         a.push({ type: 'Low Temperature', detail: `Sensor T${i} = ${t.toFixed(1)}°C`, severity: 'warning' });
-        addEvent('Under Temperature', `Sensor T${i} below 0°C: ${t.toFixed(1)}°C`, 'warning');
+        addEvent('Under Temperature', `Sensor T${i} below ${lowTemp}°C: ${t.toFixed(1)}°C`, 'warning');
       }
 
       // Temperature spike detection
@@ -340,6 +434,7 @@ export default function MenuLevel() {
     }
 
     // Current alerts
+    const highCurr = warnings?.current?.high ?? 50;
     const cc = Number(params.cc) || 0;
     const dc = Number(params.dc) || 0;
     const lc = Number(params.lc) || 0;
@@ -347,13 +442,13 @@ export default function MenuLevel() {
     const prevDc = Number(prevParams.dc) || 0;
 
     // Only process if we have valid current values
-    if (isFinite(cc) && cc > 50) {
+    if (isFinite(cc) && cc > highCurr) {
       a.push({ type: 'High Charging Current', detail: `${cc.toFixed(2)}A`, severity: 'warning' });
-      addEvent('Over Current', `Charging current exceeded 50A: ${cc.toFixed(2)}A`, 'warning');
+      addEvent('Over Current', `Charging current exceeded ${highCurr}A: ${cc.toFixed(2)}A`, 'warning');
     }
-    if (isFinite(dc) && dc > 50) {
+    if (isFinite(dc) && dc > highCurr) {
       a.push({ type: 'High Discharge Current', detail: `${dc.toFixed(2)}A`, severity: 'warning' });
-      addEvent('Over Current', `Discharge current exceeded 50A: ${dc.toFixed(2)}A`, 'warning');
+      addEvent('Over Current', `Discharge current exceeded ${highCurr}A: ${dc.toFixed(2)}A`, 'warning');
     }
 
     // Current spike detection
@@ -365,34 +460,38 @@ export default function MenuLevel() {
     }
 
     setAlerts(a);
-  }, [params, historicalData]);
+  }, [params, historicalData, warnings]);
 
   // Prepare chart data
   const voltageChartData = useMemo(() => {
+    const highVolt = warnings?.cellVoltage?.high ?? 4.2;
+    const lowVolt = warnings?.cellVoltage?.low ?? 3.0;
     const data = [];
     for (let i = 1; i <= 24; i++) {
       const voltage = Number(params[`v${i}`]) || 0;
       data.push({
         cell: `v${i}`,
         voltage: voltage,
-        status: voltage > 4.2 ? 'High' : voltage < 3.0 ? 'Low' : 'Normal'
+        status: voltage > highVolt ? 'High' : voltage < lowVolt ? 'Low' : 'Normal'
       });
     }
     return data;
-  }, [params]);
+  }, [params, warnings]);
 
   const temperatureChartData = useMemo(() => {
+    const highTemp = warnings?.temperature?.high ?? 60;
+    const lowTemp = warnings?.temperature?.low ?? 0;
     const data = [];
     for (let i = 1; i <= 25; i++) {
       const temp = Number(params[`T${i}`]) || 0;
       data.push({
         sensor: `T${i}`,
         temperature: temp,
-        status: temp > 60 ? 'High' : temp < 0 ? 'Low' : 'Normal'
+        status: temp > highTemp ? 'High' : temp < lowTemp ? 'Low' : 'Normal'
       });
     }
     return data;
-  }, [params]);
+  }, [params, warnings]);
 
   const currentAnalytics = useMemo(() => {
     const cc = Number(params.cc) || 0;
@@ -490,7 +589,7 @@ export default function MenuLevel() {
 
 useEffect(() => {
   if (currentPage === "Analytics") {
-    fetch('http://192.168.0.28:8070/analytics') // assuming endpoint
+    fetch(`${import.meta.env.VITE_APP_API_BASE_URL}/analytics`) // assuming endpoint
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -572,13 +671,53 @@ useEffect(() => {
               <Title as="h1">Live Monitoring</Title>
               <div className="flex space-x-4">
                 <button onClick={() => setShowLogsPopup(true)} className="px-3 py-1 rounded bg-blue-500 text-white text-sm">View Logs</button>
-                <span className={`px-3 py-1 rounded-full text-sm ${wsConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  WS: {wsConnected ? 'Connected' : 'Disconnected'}
-                </span>
-                <span className={`px-3 py-1 rounded-full text-sm ${!fetchError ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  Server: {!fetchError ? 'OK' : 'Failed'}
-                </span>
-                <span className="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">Last: {new Date().toLocaleTimeString()}</span>
+                <button onClick={() => {
+                  fetchWarningHistory();
+                  setTimeout(() => {
+                    const warningsSection = document.getElementById('warnings-section');
+                    if (warningsSection) {
+                      warningsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }, 500);
+                }} disabled={isLoadingWarnings} className="relative px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium shadow-lg hover:from-orange-600 hover:to-red-600 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:transform-none disabled:scale-100 border-2 border-orange-400">
+                  <div className="flex items-center space-x-2">
+                    <Icon icon="mdi:alert-circle-outline" className="text-lg" />
+                    <span>{isLoadingWarnings ? 'Loading...' : 'View Warning History'}</span>
+                    {isLoadingWarnings && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>}
+                  </div>
+                  {!isLoadingWarnings && (
+                    <div className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold animate-pulse">
+                      !
+                    </div>
+                  )}
+                </button>
+
+                {/* <button onClick={() => setShowAlertsModal(true)} className={`px-2 py-1 rounded ${alerts.length > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}>
+                  <Icon icon="mdi:bell" />
+                </button> */}
+             <span
+    className={`flex items-center justify-center px-3 py-1 rounded-full text-sm font-medium ${
+      wsConnected
+        ? 'bg-green-100 text-green-800'
+        : 'bg-red-100 text-red-800'
+    }`}
+  >
+    WS: {wsConnected ? 'Connected' : 'Disconnected'}
+  </span>
+
+  <span
+    className={`flex items-center justify-center px-3 py-1 rounded-full text-sm font-medium ${
+      !fetchError
+        ? 'bg-green-100 text-green-800'
+        : 'bg-red-100 text-red-800'
+    }`}
+  >
+    Server: {!fetchError ? 'OK' : 'Failed'}
+  </span>
+
+  <span className="flex items-center justify-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+    Last: {new Date().toLocaleTimeString()}
+  </span>
               </div>
             </div>
 
@@ -586,39 +725,32 @@ useEffect(() => {
             {toastAlerts.length > 0 && (
               <div className="fixed top-4 right-4 z-50 space-y-2">
                 {toastAlerts.map(alert => (
-                  <div key={alert.id} className={`p-4 rounded-lg shadow-lg ${alert.severity === 'error' ? 'bg-red-100 border-red-500 text-red-800' : 'bg-yellow-100 border-yellow-500 text-yellow-800'} border-l-4`}>
-                    <div className="font-semibold">{alert.type}</div>
-                    <div className="text-sm">{alert.detail}</div>
-                    <div className="text-xs opacity-75">{alert.timestamp}</div>
+                  <div key={alert.id} className={`relative p-4 pr-10 rounded-lg shadow-lg ${alert.severity === 'error' ? 'bg-red-100 border-red-500 text-red-800' : 'bg-yellow-100 border-yellow-500 text-yellow-800'} border-l-4 animate-slide-in-right`}>
+                    <button
+                      onClick={() => setToastAlerts(prev => prev.filter(a => a.id !== alert.id))}
+                      className="absolute top-2 right-2 p-1 hover:bg-black hover:bg-opacity-10 rounded-full transition-colors duration-200"
+                      title="Close alert"
+                    >
+                      <Icon icon="mdi:close" className="text-sm" />
+                    </button>
+                    <div className="font-semibold flex items-center">
+                      <Icon
+                        icon={alert.severity === 'error' ? 'mdi:alert-circle' : 'mdi:alert'}
+                        className="mr-2"
+                      />
+                      {alert.type}
+                    </div>
+                    <div className="text-sm mt-1">{alert.detail}</div>
+                    <div className="text-xs opacity-75 mt-2">{alert.timestamp}</div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Alerts Panel */}
-            {alerts.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Icon icon="mdi:alert" className="text-red-500" />
-                    Active Alerts ({alerts.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {alerts.map((alert, i) => (
-                      <div key={i} className={`p-3 rounded-lg border-l-4 ${alert.severity === 'error' ? 'bg-red-50 border-red-500 text-red-800' : 'bg-yellow-50 border-yellow-500 text-yellow-800'}`}>
-                        <div className="font-semibold">{alert.type}</div>
-                        <div className="text-sm">{alert.detail}</div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+
 
             {/* System Analytics Overview */}
-            {params && Object.keys(params).length > 0 && (
+            {params && Object.keys(params).length > 0 && selectedDevice?.connected && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4">
@@ -667,46 +799,55 @@ useEffect(() => {
                 </Card>
               </div>
             )}
-            {/* Device Selection */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card>
-<CardHeader>
-  <div className="flex items-center justify-between">
-    <CardTitle>Device Selection</CardTitle>
+{/* Device Selection */}
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <Card>
+    <CardHeader>
+      <div className="flex items-center justify-between">
+        <CardTitle>Device Selection</CardTitle>
 
-    {/* When WebSocket is connected */}
-    {wsConnected ? (
-      filteredData.some(device => device.connected) ? (
-        // Case: At least one online device
-        <button
-          onClick={() => setLiveStreamingMode(!liveStreamingMode)}
-          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse hover:bg-green-600 transition-colors"
-        >
-          <Wifi size={16} />
-          Click to see online devices
-        </button>
-      ) : (
-        // Case: All devices offline
-        <button
-          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-red-500 text-white cursor-not-allowed"
-          disabled
-        >
-          <Wifi size={16} />
-          Every device is offline
-        </button>
-      )
-    ) : (
-      // When WebSocket is disconnected
-      <button
-        className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-400 text-gray-700 cursor-not-allowed"
-        disabled
-      >
-        <Wifi size={16} />
-        Click to see online devices
-      </button>
-    )}
-  </div>
-</CardHeader>
+        {/* When WebSocket is connected */}
+        {wsConnected ? (
+          filteredData.length === 0 ? (
+            // Case: No devices available
+            <button
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-300 text-gray-700 cursor-not-allowed"
+              disabled
+            >
+              <Wifi size={16} />
+              No devices available
+            </button>
+          ) : filteredData.some((device) => device.connected) ? (
+            // Case: At least one online device
+            <button
+              onClick={() => setLiveStreamingMode(!liveStreamingMode)}
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse hover:bg-green-600 transition-colors"
+            >
+              <Wifi size={16} />
+              Click to see online devices
+            </button>
+          ) : (
+            // Case: All devices offline
+            <button
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-red-500 text-white cursor-not-allowed"
+              disabled
+            >
+              <Wifi size={16} />
+              Every device is offline
+            </button>
+          )
+        ) : (
+          // When WebSocket is disconnected
+          <button
+            className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-400 text-gray-700 cursor-not-allowed"
+            disabled
+          >
+            <Wifi size={16} />
+            Click to see online devices
+          </button>
+        )}
+      </div>
+    </CardHeader>
 
                 <CardContent>
                   <div className="mb-4">
@@ -730,7 +871,7 @@ useEffect(() => {
                         }`}
                       >
                         <div className="font-medium">{device.deviceId}</div>
-                        <div className="text-sm text-gray-600">{device.batteryId}</div>
+                        <div className="text-sm text-gray-600">{device.stationDetails?.name || 'No Station Assigned'}</div>
                         <div className={`text-sm ${device.connected ? 'text-green-600' : 'text-red-600'}`}>
                           {device.connected ? 'Online' : 'Offline'}
                         </div>
@@ -775,7 +916,7 @@ useEffect(() => {
               </Card>
 
               {/* Current Analytics */}
-              {currentAnalytics.length > 0 && (
+              {currentAnalytics.length > 0 && selectedDevice?.connected && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Current Distribution</CardTitle>
@@ -804,8 +945,23 @@ useEffect(() => {
                 </Card>
               )}
             </div>
+            {/* Device Status Message */}
+            {selectedDeviceId && !selectedDevice?.connected && (
+              <Card className="border-l-4 border-l-red-500">
+                <CardContent className="p-6">
+                  <div className="flex items-center text-red-600">
+                    <Icon icon="mdi:alert-circle" className="mr-3 text-xl" />
+                    <div>
+                      <h3 className="font-semibold">Device Offline</h3>
+                      <p className="text-sm">The selected device ({selectedDeviceId}) is currently offline. No live data or analytics are available.</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Detailed Device Monitoring */}
-            {selectedDeviceId && (isLoadingDevice || (params && Object.keys(params).length > 0)) && (
+            {selectedDeviceId && selectedDevice?.connected && (isLoadingDevice || (params && Object.keys(params).length > 0)) && (
   <div className="space-y-6">
     {isLoadingDevice ? (
       // Skeleton loading UI
@@ -977,7 +1133,9 @@ useEffect(() => {
         <Bar dataKey="voltage">
           {voltageChartData.map((entry, index) => {
             const voltage = entry.voltage;
-            const fill = voltage > 4.2 ? '#EF4444' : voltage < 3.0 ? '#F59E0B' : '#10B981';
+            const highVolt = warnings?.cellVoltage?.high ?? 4.2;
+            const lowVolt = warnings?.cellVoltage?.low ?? 3.0;
+            const fill = voltage > highVolt ? '#EF4444' : voltage < lowVolt ? '#F59E0B' : '#10B981';
             return <Cell key={`cell-${index}`} fill={fill} />;
           })}
         </Bar>
@@ -1067,7 +1225,9 @@ useEffect(() => {
                   <Bar dataKey="temperature">
                     {temperatureChartData.map((entry, index) => {
                       const temp = entry.temperature;
-                      const fill = temp > 60 ? '#EF4444' : temp < 0 ? '#3B82F6' : '#10B981';
+                      const highTemp = warnings?.temperature?.high ?? 60;
+                      const lowTemp = warnings?.temperature?.low ?? 0;
+                      const fill = temp > highTemp ? '#EF4444' : temp < lowTemp ? '#3B82F6' : '#10B981';
                       return <Cell key={`cell-${index}`} fill={fill} />;
                     })}
                   </Bar>
@@ -1079,7 +1239,7 @@ useEffect(() => {
          
         </div>
         {/* Trend Analysis */}
-        {trendData.length > 0 && (
+        {trendData.length > 0 && selectedDevice?.connected && (
           <Card>
             <CardHeader>
               <CardTitle>Historical Trends</CardTitle>
@@ -1185,6 +1345,109 @@ useEffect(() => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Warning History Section */}
+        {showWarningsModal && (
+          <div id="warnings-section" className="mt-6">
+            <Card className="border-l-4 border-l-orange-500">
+              <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-orange-50 to-red-50">
+                <CardTitle className="text-orange-800 flex items-center">
+                  <Icon icon="mdi:alert-circle" className="mr-2 text-orange-600" />
+                  Warning History for {selectedDeviceId}
+                </CardTitle>
+                <div className="flex items-center space-x-2">
+               <button
+  onClick={exportToExcel}
+  className="flex items-center gap-2 border border-gray-600 text-gray-700 px-4 py-2 rounded-full hover:bg-green-50 hover:text-green-800 transition-colors duration-200"
+  title="Export Data"
+>
+  <Icon icon="mdi:download" className="text-green-600 text-lg" />
+  <span className="font-medium">Export Data</span>
+</button>
+
+                  <button
+                    onClick={() => setShowWarningsModal(false)}
+                    className="p-2 hover:bg-red-100 rounded-full transition-colors duration-200"
+                    title="Close warning history"
+                  >
+                    <Icon icon="mdi:close" className="text-red-600 text-xl" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {warningHistory.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <div className="max-h-96 overflow-y-auto">
+                      <table className="min-w-full bg-white border border-gray-300">
+                        <thead className="sticky top-0 bg-gradient-to-r from-gray-100 to-gray-200">
+                          <tr>
+                            <th className="px-4 py-2 border font-semibold">Parameter</th>
+                            <th className="px-4 py-2 border font-semibold">Type</th>
+                            <th className="px-4 py-2 border font-semibold">Value</th>
+                            <th className="px-4 py-2 border font-semibold">Threshold</th>
+                            <th className="px-4 py-2 border font-semibold">Message</th>
+                            <th className="px-4 py-2 border font-semibold">Timestamp</th>
+                            <th className="px-4 py-2 border font-semibold">Resolved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {warningHistory.map((warning, index) => {
+                            const isRecent = new Date(warning.timestamp) > new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
+                            const getTypeColor = (type) => {
+                              switch (type?.toLowerCase()) {
+                                case 'high': return 'bg-red-100 text-red-800 border-red-200';
+                                case 'low': return 'bg-blue-100 text-blue-800 border-blue-200';
+                                case 'over': return 'bg-orange-100 text-orange-800 border-orange-200';
+                                case 'under': return 'bg-purple-100 text-purple-800 border-purple-200';
+                                default: return 'bg-gray-100 text-gray-800 border-gray-200';
+                              }
+                            };
+                            return (
+                              <tr
+                                key={warning._id || index}
+                                className={`hover:bg-gray-50 transition-colors duration-200 ${
+                                  isRecent ? 'bg-yellow-50 border-l-4 border-l-yellow-400' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-2 border font-medium">{warning.parameter}</td>
+                                <td className="px-4 py-2 border">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getTypeColor(warning.type)}`}>
+                                    {warning.type}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 border text-red-600 font-mono">{warning.value}</td>
+                                <td className="px-4 py-2 border text-blue-600 font-mono">{warning.threshold}</td>
+                                <td className="px-4 py-2 border">{warning.message}</td>
+                                <td className="px-4 py-2 border text-gray-600 text-sm">
+                                  {isRecent && <span className="text-yellow-600 font-semibold mr-1">NEW</span>}
+                                  {new Date(warning.timestamp).toLocaleString()}
+                                </td>
+                                <td className="px-4 py-2 border">
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    warning.resolved
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {warning.resolved ? '✓ Resolved' : '✗ Active'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Icon icon="mdi:check-circle" className="text-green-500 text-4xl mx-auto mb-2" />
+                    <p>No warnings found for this device.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </>
     )}
   </div>
@@ -1420,6 +1683,25 @@ useEffect(() => {
           </div>
         </div>
       )}
+      {showAlertsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full max-h-96 overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold">Active Alerts ({alerts.length})</h2>
+              <button onClick={() => setShowAlertsModal(false)} className="text-gray-500 hover:text-gray-700 text-xl">×</button>
+            </div>
+            <div className="space-y-2">
+              {alerts.map((alert, i) => (
+                <div key={i} className={`p-3 rounded-lg border-l-4 ${alert.severity === 'error' ? 'bg-red-50 border-red-500 text-red-800' : 'bg-yellow-50 border-yellow-500 text-yellow-800'}`}>
+                  <div className="font-semibold">{alert.type}</div>
+                  <div className="text-sm">{alert.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

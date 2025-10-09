@@ -512,7 +512,8 @@ function DevicesPage() {
                                   <Icon icon="lucide:edit" size={18} />
                                 </Button>
                               )}
-                              <Button
+                              {isAdmin && (
+                                                              <Button
   size="icon"
   variant="outline"
   className="relative w-12 h-6 rounded-full border-1 border-gray-400 transition-colors data-[active=true]:border-green-500"
@@ -528,7 +529,8 @@ function DevicesPage() {
         : "translate-x-0 bg-gray-400"
     }`}
   />
-</Button>
+</Button>)}
+
 
 
                             </>
