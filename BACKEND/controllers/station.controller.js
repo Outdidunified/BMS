@@ -6,6 +6,7 @@ import Role from '../data/Role.model.js';
 import StationAssignment from '../data/StationAssignment.model.js';
 import logger from '../utils/logger.js';
 import { ObjectId } from 'mongodb';
+import { collections } from '../config/db.js';
 
 const toObjectId = value => (value instanceof ObjectId ? value : new ObjectId(value));
 
@@ -36,7 +37,55 @@ export const getStations = async (req, res) => {
             return res.fail('Unauthorized', 403);
         }
 
-        res.ok(stations, 'Stations retrieved successfully');
+        const assignmentModel = new StationAssignment(db);
+        const userModel = new User(db);
+
+        const stationAssignments = await Promise.all(
+            stations.map(async station => ({
+                station,
+                assignments: await assignmentModel.listByStation(station._id),
+            }))
+        );
+
+        const userIdStrings = [
+            ...new Set(
+                stationAssignments
+                    .flatMap(({ assignments }) => assignments.map(assignment => assignment.userId))
+                    .filter(Boolean)
+                    .map(userId => userId.toString())
+            ),
+        ];
+
+        let users = [];
+        if (userIdStrings.length > 0) {
+            const userObjectIds = userIdStrings.map(id => new ObjectId(id));
+            users = await userModel.collection
+                .find({ _id: { $in: userObjectIds } })
+                .toArray();
+        }
+
+        const userMap = new Map(users.map(user => [user._id.toString(), user]));
+
+        const enrichedStations = stationAssignments.map(({ station, assignments }) => ({
+            ...station,
+            assignments: assignments.map(assignment => {
+                const userIdStr = assignment.userId ? assignment.userId.toString() : null;
+                const user = userIdStr ? userMap.get(userIdStr) : null;
+
+                return {
+                    user: user
+                        ? {
+                            id: user._id.toString(),
+                            user_id: user.user_id,
+                            name: user.name,
+                            email: user.email,
+                        }
+                        : null,
+                };
+            }),
+        }));
+
+        res.ok(enrichedStations, 'Stations retrieved successfully');
     } catch (error) {
         logger.loggerError(`Get stations error: ${error.message}`);
         res.fail('Internal server error', 500);
@@ -45,20 +94,44 @@ export const getStations = async (req, res) => {
 
 export const getStation = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { stationId } = req.params;
         const db = getDb();
         const stationModel = new Station(db);
+        const assignmentModel = new StationAssignment(db);
 
-        const station = await stationModel.findById(id);
+        const station = await stationModel.findById(stationId);
         if (!station) {
             return res.fail('Station not found', 404);
         }
 
         // Check permission
-        if (req.user.role !== 'superadmin' && (!req.user.station_id || req.user.station_id.toString() !== id)) {
+        if (req.user.role !== 'superadmin' && (!req.user.station_id || req.user.station_id.toString() !== stationId)) {
             return res.fail('Unauthorized', 403);
         }
 
+        const assignments = await assignmentModel.listByStation(station._id);
+
+        let assignedUsers = [];
+        if (assignments.length > 0) {
+            const userIds = [...new Set(assignments.map(a => a.userId))];
+            assignedUsers = await User.find({ _id: { $in: userIds } }).lean();
+        }
+
+        const userMap = new Map(assignedUsers.map(user => [user._id.toString(), user]));
+
+        station.assignments = assignments.map(assignment => {
+            const user = userMap.get(assignment.userId.toString());
+            return {
+                user: user ? {
+                    id: user._id.toString(),
+                    user_id: user.user_id,
+                    name: user.name,
+                    email: user.email,
+                } : null,
+
+            };
+        });
+        logger.loggerInfo(`Station ${station.toString()} retrieved`);
         res.ok(station, 'Station retrieved successfully');
     } catch (error) {
         logger.loggerError(`Get station error: ${error.message}`);
@@ -96,19 +169,19 @@ export const updateStation = async (req, res) => {
             return res.fail('Only superadmin can update stations', 403);
         }
 
-        const { id } = req.params;
+        const { stationId } = req.params;
         const { name, location, status } = req.body;
 
         const db = getDb();
         const stationModel = new Station(db);
 
-        const success = await stationModel.update(id, { name, location, status });
+        const success = await stationModel.update(stationId, { name, location, status });
 
         if (!success) {
             return res.fail('Station not found', 404);
         }
 
-        logger.loggerInfo(`Station ${id} updated`);
+        logger.loggerInfo(`Station ${stationId} updated`);
         res.ok({}, 'Station updated successfully');
     } catch (error) {
         logger.loggerError(`Update station error: ${error.message}`);
@@ -116,26 +189,35 @@ export const updateStation = async (req, res) => {
     }
 };
 
-export const deleteStation = async (req, res) => {
+export const deactivateStation = async (req, res) => {
     try {
         if (req.user.role !== 'superadmin') {
-            return res.fail('Only superadmin can delete stations', 403);
+            return res.fail('Only superadmin can deactivate stations', 403);
         }
 
-        const { id } = req.params;
+        const { stationId } = req.params;
+        const { status } = req.body;
+
+        if (status === undefined) {
+            return res.fail('Status is required', 400);
+        }
+
         const db = getDb();
         const stationModel = new Station(db);
 
-        const success = await stationModel.delete(id);
+        const updateData = { status };
+
+        const success = await stationModel.update(stationId, updateData);
 
         if (!success) {
             return res.fail('Station not found', 404);
         }
 
-        logger.loggerInfo(`Station ${id} deleted`);
-        res.ok({}, 'Station deleted successfully');
+        const updatedStation = await stationModel.findById(stationId);
+        logger.loggerInfo(`Station ${updatedStation.name} ${status ? 'activated' : 'deactivated'}`);
+        res.ok(updatedStation);
     } catch (error) {
-        logger.loggerError(`Delete station error: ${error.message}`);
+        logger.loggerError(`Deactivate station error: ${error.message}`);
         res.fail('Internal server error', 500);
     }
 };
@@ -166,11 +248,31 @@ export const assignDeviceToStation = async (req, res) => {
             return res.fail('Device not found', 404);
         }
 
-        const existingDeviceId = station.devices?.device_id;
-        if (existingDeviceId !== deviceId) {
+        const sanitizedDevices = Array.isArray(station.devices)
+            ? station.devices
+            : station.devices
+                ? [station.devices]
+                : [];
+
+        if (!Array.isArray(station.devices)) {
             await stationModel.collection.updateOne(
                 { _id: new ObjectId(stationId) },
-                { $set: { devices: { device_id: deviceId }, updatedAt: new Date() } }
+                {
+                    $set: {
+                        devices: sanitizedDevices,
+                        updatedAt: new Date(),
+                    },
+                }
+            );
+        }
+
+        if (!sanitizedDevices.includes(deviceId)) {
+            await stationModel.collection.updateOne(
+                { _id: new ObjectId(stationId) },
+                {
+                    $addToSet: { devices: deviceId },
+                    $set: { updatedAt: new Date() },
+                }
             );
         }
 
@@ -202,8 +304,13 @@ export const unassignDeviceFromStation = async (req, res) => {
             return res.fail('Station not found', 404);
         }
 
-        const existingDeviceId = station.devices?.device_id;
-        if (existingDeviceId !== deviceId) {
+        const sanitizedDevices = Array.isArray(station.devices)
+            ? station.devices
+            : station.devices
+                ? [station.devices]
+                : [];
+
+        if (!sanitizedDevices.includes(deviceId)) {
             return res.fail('Device is not assigned to this station', 404);
         }
 
@@ -213,7 +320,7 @@ export const unassignDeviceFromStation = async (req, res) => {
             { _id: new ObjectId(stationId) },
             {
                 $set: { updatedAt: new Date() },
-                $unset: { devices: '' },
+                $pull: { devices: deviceId },
             }
         );
 
@@ -255,6 +362,11 @@ export const assignUserToStation = async (req, res) => {
         const user = await userModel.findById(userId);
         if (!user) {
             return res.fail('User not found', 404);
+        }
+
+        const currentAssignments = await assignmentModel.listByStation(station._id);
+        if (currentAssignments.some(assignment => assignment.unassignedAt === null && assignment.userId.toString() !== user._id.toString())) {
+            return res.fail('Station already has an active user assigned', 409);
         }
 
         let resolvedRole = null;
@@ -396,7 +508,7 @@ export const unassignUserFromStation = async (req, res) => {
             { _id: user._id },
             {
                 $set: {
-                    assigned_station_ids: buildAssignedStationEntries(filteredEntries),
+                    assigned_station_ids: filteredEntries,
                     updatedAt: new Date(),
                 },
             }
@@ -472,6 +584,62 @@ export const getStationDevices = async (req, res) => {
         res.ok(devices, 'Devices retrieved successfully');
     } catch (error) {
         logger.loggerError(`Get station devices error: ${error.message}`);
+        res.fail('Internal server error', 500);
+    }
+};
+
+export const getUnassignedSummary = async (req, res) => {
+    try {
+        const db = getDb();
+        const userModel = new User(db);
+        const stationModel = new Station(db);
+        const assignmentModel = new StationAssignment(db);
+
+        // Devices with no station assignment
+        const unassignedDevices = await Device.find({ station_id: { $exists: false } });
+
+        // Get all stations
+        const allStations = await stationModel.collection.find({}).toArray();
+
+        // Get all active station assignments
+        const activeAssignments = await assignmentModel.collection
+            .find({ unassignedAt: null })
+            .toArray();
+
+        // Create a Set of station IDs that have active assignments
+        const assignedStationIds = new Set(
+            activeAssignments.map(assignment => assignment.stationId.toString())
+        );
+
+        // Filter stations that don't have any active user assignments
+        const unassignedStations = allStations.filter(
+            station => !assignedStationIds.has(station._id.toString())
+        );
+
+        const unassignUser = await userModel.collection
+            .find({
+                assigned_station_ids: { $in: [null, []] },
+                role_id: { $ne: await (new Role(db)).getNextRoleId() }, // Exclude superadmin role
+            })
+            .toArray();
+
+        res.ok(
+            {
+                unassignedDevices,
+                unassignUser: unassignUser.map(user => ({
+                    id: user._id.toString(),
+                    user_id: user.user_id,
+                    email: user.email,
+                    name: user.name,
+                    role_id: user.role_id,
+                    assigned_station_ids: serializeAssignedStationEntries(user.assigned_station_ids),
+                })),
+                unassignedStations,
+            },
+            'Unassigned summary retrieved successfully'
+        );
+    } catch (error) {
+        logger.loggerError(`Get unassigned summary error: ${error.message}`);
         res.fail('Internal server error', 500);
     }
 };

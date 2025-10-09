@@ -16,16 +16,6 @@ function normalizeObjectId(value, fieldName) {
     return new ObjectId(value);
 }
 
-function normalizeNumber(value, fieldName) {
-    const numericValue = Number(value);
-
-    if (!Number.isFinite(numericValue)) {
-        throw new Error(`${fieldName} must be a finite number`);
-    }
-
-    return numericValue;
-}
-
 function normalizeDate(value, fieldName) {
     const dateValue = value instanceof Date ? value : new Date(value ?? Date.now());
 
@@ -36,9 +26,9 @@ function normalizeDate(value, fieldName) {
     return dateValue;
 }
 
-export default class StationAssignment {
+export default class DeviceAssignment {
     constructor(db) {
-        this.collection = db.collection('station_assignments');
+        this.collection = db.collection('device_assignments');
         this.indexesEnsured = false;
     }
 
@@ -48,22 +38,22 @@ export default class StationAssignment {
         }
 
         await this.collection.createIndex(
-            { userId: 1, stationId: 1, unassignedAt: 1 },
+            { userId: 1, deviceId: 1, unassignedAt: 1 },
             {
                 unique: true,
-                name: 'unique_active_user_station',
+                name: 'unique_active_user_device',
                 partialFilterExpression: { unassignedAt: null },
             }
         );
 
         await this.collection.createIndex(
             { userId: 1, unassignedAt: 1, assignedAt: -1 },
-            { name: 'user_active_assignments' }
+            { name: 'user_active_device_assignments' }
         );
 
         await this.collection.createIndex(
-            { stationId: 1, unassignedAt: 1, assignedAt: -1 },
-            { name: 'station_active_assignments' }
+            { deviceId: 1, unassignedAt: 1, assignedAt: -1 },
+            { name: 'device_active_assignments' }
         );
 
         this.indexesEnsured = true;
@@ -71,31 +61,26 @@ export default class StationAssignment {
 
     async createAssignment({
         userId,
-        stationId,
-        stationNumber,
-        roleId,
-        roleName = null,
+        deviceId,
         assignedAt,
     }) {
         await this.ensureIndexes();
 
         const now = normalizeDate(assignedAt, 'assignedAt');
 
+        // deviceId is stored as string (not ObjectId)
+        if (!deviceId || typeof deviceId !== 'string') {
+            throw new Error('deviceId must be a non-empty string');
+        }
+
         const assignment = {
             userId: normalizeObjectId(userId, 'userId'),
-            stationId: normalizeObjectId(stationId, 'stationId'),
-            stationNumber: normalizeNumber(stationNumber, 'stationNumber'),
-            roleId: normalizeNumber(roleId, 'roleId'),
-            roleName: roleName ?? null,
+            deviceId: deviceId,
             assignedAt: now,
             unassignedAt: null,
             createdAt: now,
             updatedAt: now,
         };
-
-        if (assignment.roleName !== null && typeof assignment.roleName !== 'string') {
-            throw new Error('roleName must be a string when provided');
-        }
 
         const result = await this.collection.insertOne(assignment);
         return { _id: result.insertedId, ...assignment };
@@ -116,8 +101,7 @@ export default class StationAssignment {
             { returnDocument: 'after' }
         );
 
-        // MongoDB driver returns the document directly, not in a 'value' property
-        return result ?? null;
+        return result?.value ?? null;
     }
 
     async listByUser(userId, { includeInactive = false } = {}) {
@@ -134,9 +118,12 @@ export default class StationAssignment {
             .toArray();
     }
 
-    async listByStation(stationId, { includeInactive = false } = {}) {
-        const normalizedStationId = normalizeObjectId(stationId, 'stationId');
-        const filter = { stationId: normalizedStationId };
+    async listByDevice(deviceId, { includeInactive = false } = {}) {
+        if (!deviceId || typeof deviceId !== 'string') {
+            throw new Error('deviceId must be a non-empty string');
+        }
+
+        const filter = { deviceId };
 
         if (!includeInactive) {
             filter.unassignedAt = null;
@@ -148,32 +135,49 @@ export default class StationAssignment {
             .toArray();
     }
 
-    async findActiveAssignment(userId, stationId) {
+    async findActiveAssignment(userId, deviceId) {
         const normalizedUserId = normalizeObjectId(userId, 'userId');
-        const normalizedStationId = normalizeObjectId(stationId, 'stationId');
+
+        if (!deviceId || typeof deviceId !== 'string') {
+            throw new Error('deviceId must be a non-empty string');
+        }
 
         return await this.collection.findOne({
             userId: normalizedUserId,
-            stationId: normalizedStationId,
+            deviceId: deviceId,
             unassignedAt: null,
         });
     }
 
-    async findActiveAssignmentByStation(stationId) {
-        const normalizedStationId = normalizeObjectId(stationId, 'stationId');
+    async findActiveAssignmentByUser(userId) {
+        const normalizedUserId = normalizeObjectId(userId, 'userId');
 
         return await this.collection.findOne({
-            stationId: normalizedStationId,
+            userId: normalizedUserId,
             unassignedAt: null,
         });
     }
 
-    async deactivateAssignmentsByStation(stationId, unassignedAt = new Date()) {
-        const normalizedStationId = normalizeObjectId(stationId, 'stationId');
+    async findActiveAssignmentByDevice(deviceId) {
+        if (!deviceId || typeof deviceId !== 'string') {
+            throw new Error('deviceId must be a non-empty string');
+        }
+
+        return await this.collection.findOne({
+            deviceId: deviceId,
+            unassignedAt: null,
+        });
+    }
+
+    async deactivateAssignmentsByDevice(deviceId, unassignedAt = new Date()) {
+        if (!deviceId || typeof deviceId !== 'string') {
+            throw new Error('deviceId must be a non-empty string');
+        }
+
         const closingDate = normalizeDate(unassignedAt, 'unassignedAt');
 
         const { modifiedCount } = await this.collection.updateMany(
-            { stationId: normalizedStationId, unassignedAt: null },
+            { deviceId: deviceId, unassignedAt: null },
             {
                 $set: {
                     unassignedAt: closingDate,

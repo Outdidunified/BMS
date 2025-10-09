@@ -6,7 +6,7 @@ const StationSchema = {
     name: String,
     location: String, // optional
     status: Boolean,
-    devices: { device_id: String }, // single device reference stored as an object
+    devices: [String], // device ids assigned to the station
     warnings: Object, // nested warning thresholds by category
     createdAt: Date,
     updatedAt: Date,

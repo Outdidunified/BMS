@@ -7,10 +7,10 @@ export const getAllRoles = async (req, res) => {
         const db = getDb();
         const roleModel = new Role(db);
         const roles = await roleModel.findAll();
-        res.success(roles);
+        res.ok(roles);
     } catch (error) {
         logger.loggerError(`Get all roles error: ${error.message}`);
-        res.error('Failed to fetch roles', 500);
+        res.fail('Failed to fetch roles', 500);
     }
 };
 
@@ -22,13 +22,13 @@ export const getRoleById = async (req, res) => {
         const role = await roleModel.findById(id);
 
         if (!role) {
-            return res.error('Role not found', 404);
+            return res.fail('Role not found', 404);
         }
 
-        res.success(role);
+        res.ok(role);
     } catch (error) {
         logger.loggerError(`Get role by ID error: ${error.message}`);
-        res.error('Failed to fetch role', 500);
+        res.fail('Failed to fetch role', 500);
     }
 };
 
@@ -37,7 +37,7 @@ export const createRole = async (req, res) => {
         const { name, permissions, status } = req.body;
 
         if (!name) {
-            return res.error('Role name is required', 400);
+            return res.fail('Role name is required', 400);
         }
 
         const db = getDb();
@@ -46,7 +46,7 @@ export const createRole = async (req, res) => {
         // Check if role name already exists
         const existingRole = await roleModel.findByName(name);
         if (existingRole) {
-            return res.error('Role name already exists', 400);
+            return res.fail('Role name already exists', 400);
         }
 
         const roleData = {
@@ -57,10 +57,10 @@ export const createRole = async (req, res) => {
 
         const role = await roleModel.create(roleData);
         logger.loggerInfo(`Role created: ${role.name}`);
-        res.success(role, 201);
+        res.ok(role, 'Role created successfully', 201);
     } catch (error) {
         logger.loggerError(`Create role error: ${error.message}`);
-        res.error('Failed to create role', 500);
+        res.fail('Failed to create role', 500);
     }
 };
 
@@ -80,35 +80,44 @@ export const updateRole = async (req, res) => {
         const success = await roleModel.update(id, updateData);
 
         if (!success) {
-            return res.error('Role not found or no changes made', 404);
+            return res.fail('Role not found or no changes made', 404);
         }
 
         const updatedRole = await roleModel.findById(id);
         logger.loggerInfo(`Role updated: ${updatedRole.name}`);
-        res.success(updatedRole);
+        res.ok(updatedRole);
     } catch (error) {
         logger.loggerError(`Update role error: ${error.message}`);
-        res.error('Failed to update role', 500);
+        res.fail('Failed to update role', 500);
     }
 };
 
-export const deleteRole = async (req, res) => {
+export const deactivateRole = async (req, res) => {
     try {
         const { id } = req.params;
+        const { status } = req.body;
+
+        if (status === undefined) {
+            return res.fail('Status is required', 400);
+        }
+
         const db = getDb();
         const roleModel = new Role(db);
 
-        const success = await roleModel.delete(id);
+        const updateData = { status };
+
+        const success = await roleModel.update(id, updateData);
 
         if (!success) {
-            return res.error('Role not found', 404);
+            return res.fail('Role not found', 404);
         }
 
-        logger.loggerInfo(`Role deleted: ${id}`);
-        res.success({ message: 'Role deleted successfully' });
+        const updatedRole = await roleModel.findById(id);
+        logger.loggerInfo(`Role ${status ? 'activated' : 'deactivated'}: ${updatedRole.name}`);
+        res.ok(updatedRole);
     } catch (error) {
-        logger.loggerError(`Delete role error: ${error.message}`);
-        res.error(error.message, 400);
+        logger.loggerError(`Deactivate role error: ${error.message}`);
+        res.fail('Failed to update role status', 500);
     }
 };
 
@@ -117,9 +126,9 @@ export const getActiveRoles = async (req, res) => {
         const db = getDb();
         const roleModel = new Role(db);
         const roles = await roleModel.findActive();
-        res.success(roles);
+        res.ok(roles);
     } catch (error) {
         logger.loggerError(`Get active roles error: ${error.message}`);
-        res.error('Failed to fetch active roles', 500);
+        res.fail('Failed to fetch active roles', 500);
     }
 };

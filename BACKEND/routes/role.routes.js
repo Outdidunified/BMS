@@ -4,7 +4,7 @@ import {
     getRoleById,
     createRole,
     updateRole,
-    deleteRole,
+    deactivateRole,
     getActiveRoles
 } from '../controllers/role.controller.js';
 import { authenticate, requireRole } from '../middlewares/auth.middleware.js';
@@ -20,6 +20,6 @@ router.get('/getActiveRoles', getActiveRoles);
 router.get('/getRole/:id', getRoleById);
 router.post('/createRole', createRole);
 router.put('/updateRole/:id', updateRole);
-router.delete('/deleteRole/:id', deleteRole);
+router.put('/deactivateRole/:id', deactivateRole);
 
 export default router;

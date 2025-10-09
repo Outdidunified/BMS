@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate } from '../middlewares/auth.middleware.js';
+import { authenticate, requireRole } from '../middlewares/auth.middleware.js';
 import {
     getStationWarnings,
     upsertStationWarnings,
@@ -12,10 +12,10 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
-// Station-scoped warnings
-router.get('/getWarnings/:stationId', getStationWarnings);
-router.put('/createWarning/:stationId', upsertStationWarnings);
-router.patch('/updateWarning/:stationId/:category', patchStationWarningCategory);
-router.delete('/deleteWarning/:stationId/:category', deleteStationWarningCategory);
+// Station-scoped warnings - Superadmin and Stationmaster
+router.get('/getWarnings/:stationId', requireRole('superadmin', 'stationmaster'), getStationWarnings);
+router.post('/createWarning/:stationId', requireRole('superadmin', 'stationmaster'), upsertStationWarnings);
+router.patch('/updateWarning/:stationId/:category', requireRole('superadmin', 'stationmaster'), patchStationWarningCategory);
+router.delete('/deleteWarning/:stationId/:category', requireRole('superadmin', 'stationmaster'), deleteStationWarningCategory);
 
 export default router;

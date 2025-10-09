@@ -10,6 +10,9 @@ const UserSchema = {
     role_id: Number, // reference to role.role_id
     station_id: ObjectId, // reference to station._id, optional for superadmin
     stations: [ObjectId], // multiple station assignments for stationmaster
+    device_id: String, // reference to device.deviceId, optional
+    assigned_device_id: String, // current assigned device
+    status: Boolean, // true for active, false for deactivated
     createdAt: Date,
     updatedAt: Date,
 };
@@ -77,6 +80,7 @@ export default class User {
             assigned_station_ids: Array.isArray(userData.assigned_station_ids)
                 ? normalizeAssignedStationIds(userData.assigned_station_ids)
                 : [],
+            status: userData.status !== undefined ? userData.status : true,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -125,6 +129,34 @@ export default class User {
 
     async findAll() {
         return await this.collection.find({}).toArray();
+    }
+
+    async deactivate(id) {
+        const filter = buildUserFilter(id);
+        if (!filter) {
+            return false;
+        }
+        const result = await this.collection.updateOne(
+            filter,
+            { $set: { status: false, updatedAt: new Date() } }
+        );
+        return result.modifiedCount > 0;
+    }
+
+    async activate(id) {
+        const filter = buildUserFilter(id);
+        if (!filter) {
+            return false;
+        }
+        const result = await this.collection.updateOne(
+            filter,
+            { $set: { status: true, updatedAt: new Date() } }
+        );
+        return result.modifiedCount > 0;
+    }
+
+    async findActive() {
+        return await this.collection.find({ status: true }).toArray();
     }
 
     async delete(id) {

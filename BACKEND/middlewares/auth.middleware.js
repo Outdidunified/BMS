@@ -58,9 +58,12 @@ export const authenticate = async (req, res, next) => {
             normalizedStationIds.unshift(primaryStationId);
         }
 
+        const normalizedRoleId = Number.parseInt((user.role_id ?? role.role_id)?.toString(), 10);
+
         req.user = {
             ...userWithoutPassword,
             user_id: user.user_id,
+            role_id: Number.isNaN(normalizedRoleId) ? undefined : normalizedRoleId,
             role: role.name,
             permissions: role.permissions,
             station_id: primaryStationId,

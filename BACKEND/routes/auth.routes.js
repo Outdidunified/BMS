@@ -3,8 +3,9 @@ import {
     register,
     login,
     getUsers,
+    getActiveUsers,
     updateUser,
-    deleteUser,
+    updateUserStatus,
     getProfile,
     updateProfile,
 } from '../controllers/auth.controller.js';
@@ -13,14 +14,15 @@ import { authenticate, authorize, requireRole } from '../middlewares/auth.middle
 const router = express.Router();
 
 // Public routes
-router.post('/register', register); // Only for initial setup or by super_admin
 router.post('/login', login);
 
 // Protected routes
 router.get('/getProfile', authenticate, getProfile);
 router.put('/updateProfile', authenticate, updateProfile);
+router.post('/CreateUser', authenticate, requireRole('superadmin'), register);
 router.get('/getUsers', authenticate, requireRole('superadmin'), getUsers);
+router.get('/getActiveUsers', authenticate, requireRole('superadmin'), getActiveUsers);
 router.put('/updateUser/:id', authenticate, requireRole('superadmin'), updateUser);
-router.delete('/deleteUser/:id', authenticate, requireRole('superadmin'), deleteUser);
+router.put('/deactivateuser/:id', authenticate, requireRole('superadmin'), updateUserStatus);
 
 export default router;
