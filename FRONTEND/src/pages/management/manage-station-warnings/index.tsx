@@ -278,20 +278,42 @@ console.log("User Stations:", userStations);
 											<span className="text-sm">{station.location}</span>
 										</div>
 									</TableCell>
-									<TableCell>
-										{station.devices && station.devices.length > 0 ? (
-											<Badge variant="secondary">{station.devices.length} device(s)</Badge>
-										) : (
-											<span className="text-muted-foreground">No devices</span>
-										)}
-									</TableCell>
-									<TableCell>
-										{station.devices && station.devices.length > 0 ? (
-											<Badge variant="secondary">{station.assignments.length} user(s)</Badge>
-										) : (
-											<span className="text-muted-foreground">No devices</span>
-										)}
-									</TableCell>
+									{/* Devices column */}
+<TableCell>
+  {station.devices && station.devices.length > 0 ? (
+    <Badge
+      variant="secondary"
+      className="cursor-pointer hover:bg-secondary/70"
+      onClick={() => {
+        setSelectedStationId(station._id);
+        setShowDevicesDialog(true);
+      }}
+    >
+      {station.devices.length} device(s)
+    </Badge>
+  ) : (
+    <span className="text-muted-foreground">No devices</span>
+  )}
+</TableCell>
+
+{/* Users column */}
+<TableCell>
+  {station.assignments && station.assignments.length > 0 ? (
+    <Badge
+      variant="secondary"
+      className="cursor-pointer hover:bg-secondary/70"
+      onClick={() => {
+        setSelectedStationId(station._id);
+        setShowUsersDialog(true);
+      }}
+    >
+      {station.assignments.length} user(s)
+    </Badge>
+  ) : (
+    <span className="text-muted-foreground">No users</span>
+  )}
+</TableCell>
+
 									<TableCell>
 										<Badge variant={station.status ? "default" : "secondary"}>
 											{station.status ? "Active" : "Inactive"}
@@ -325,154 +347,238 @@ console.log("User Stations:", userStations);
 			</Card>
 
 			{/* Set Warnings Dialog */}
-			<Dialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>
-				<DialogContent className="sm:max-w-[600px]">
-					<DialogHeader>
-						<DialogTitle>Set Warnings</DialogTitle>
-						<DialogDescription>
-							Configure warning thresholds for cell voltage, temperature, and current.
-						</DialogDescription>
-					</DialogHeader>
-					<form onSubmit={handleCreateWarning}>
-						<div className="grid gap-4 py-4">
-							{/* Cell Voltage */}
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="cellVoltageHigh" className="text-right">
-									Cell Voltage High
-								</Label>
-								<Input
-									id="cellVoltageHigh"
-									type="number"
-									step="0.1"
-									value={warningData.cellVoltage.high}
-									onChange={(e) => handleWarningChange('cellVoltage', 'high', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="cellVoltageLow" className="text-right">
-									Cell Voltage Low
-								</Label>
-								<Input
-									id="cellVoltageLow"
-									type="number"
-									step="0.1"
-									value={warningData.cellVoltage.low}
-									onChange={(e) => handleWarningChange('cellVoltage', 'low', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="cellVoltageInterval" className="text-right">
-									Check Interval (s)
-								</Label>
-								<Input
-									id="cellVoltageInterval"
-									type="number"
-									value={warningData.cellVoltage.checkInterval}
-									onChange={(e) => handleWarningChange('cellVoltage', 'checkInterval', parseInt(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
+			{/* Set Warnings Dialog */}
+<Dialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>
+  <DialogContent className="sm:max-w-[600px]">
+    <DialogHeader>
+      <DialogTitle>Set Warnings</DialogTitle>
+      <DialogDescription>
+        Configure warning thresholds for cell voltage, temperature, and current.
+      </DialogDescription>
+    </DialogHeader>
+    <form onSubmit={handleCreateWarning}>
+      <div className="grid gap-4 py-4">
 
-							{/* Temperature */}
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="temperatureHigh" className="text-right">
-									Temperature High
-								</Label>
-								<Input
-									id="temperatureHigh"
-									type="number"
-									value={warningData.temperature.high}
-									onChange={(e) => handleWarningChange('temperature', 'high', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="temperatureLow" className="text-right">
-									Temperature Low
-								</Label>
-								<Input
-									id="temperatureLow"
-									type="number"
-									value={warningData.temperature.low}
-									onChange={(e) => handleWarningChange('temperature', 'low', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="temperatureInterval" className="text-right">
-									Check Interval (s)
-								</Label>
-								<Input
-									id="temperatureInterval"
-									type="number"
-									value={warningData.temperature.checkInterval}
-									onChange={(e) => handleWarningChange('temperature', 'checkInterval', parseInt(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
+        {/* ===== CELL VOLTAGE ===== */}
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="cellVoltageHigh" className="text-right">Cell Voltage High</Label>
+          <Input
+            id="cellVoltageHigh"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 4.2"
+            value={warningData.cellVoltage.high}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("cellVoltage", "high", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
 
-							{/* Current */}
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="currentHigh" className="text-right">
-									Current High
-								</Label>
-								<Input
-									id="currentHigh"
-									type="number"
-									value={warningData.current.high}
-									onChange={(e) => handleWarningChange('current', 'high', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="currentLow" className="text-right">
-									Current Low
-								</Label>
-								<Input
-									id="currentLow"
-									type="number"
-									value={warningData.current.low}
-									onChange={(e) => handleWarningChange('current', 'low', parseFloat(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-							<div className="grid grid-cols-4 items-center gap-4">
-								<Label htmlFor="currentInterval" className="text-right">
-									Check Interval (s)
-								</Label>
-								<Input
-									id="currentInterval"
-									type="number"
-									value={warningData.current.checkInterval}
-									onChange={(e) => handleWarningChange('current', 'checkInterval', parseInt(e.target.value))}
-									className="col-span-3"
-									required
-								/>
-							</div>
-						</div>
-						<DialogFooter>
-							<DialogClose asChild>
-								<Button type="button" variant="outline">
-									Cancel
-								</Button>
-							</DialogClose>
-							<Button type="submit" disabled={loading}>
-								{loading ? "Creating..." : "Create Warning"}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="cellVoltageLow" className="text-right">Cell Voltage Low</Label>
+          <Input
+            id="cellVoltageLow"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 3.0"
+            value={warningData.cellVoltage.low}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("cellVoltage", "low", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="cellVoltageInterval" className="text-right">Check Interval (s)</Label>
+          <Input
+            id="cellVoltageInterval"
+            type="number"
+            min="0"
+            placeholder="e.g., 120"
+            value={warningData.cellVoltage.checkInterval}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*$/.test(value)) { // integers only
+                handleWarningChange("cellVoltage", "checkInterval", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        {/* ===== TEMPERATURE ===== */}
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="temperatureHigh" className="text-right">Temperature High</Label>
+          <Input
+            id="temperatureHigh"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 70"
+            value={warningData.temperature.high}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("temperature", "high", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="temperatureLow" className="text-right">Temperature Low</Label>
+          <Input
+            id="temperatureLow"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 10"
+            value={warningData.temperature.low}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("temperature", "low", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="temperatureInterval" className="text-right">Check Interval (s)</Label>
+          <Input
+            id="temperatureInterval"
+            type="number"
+            min="0"
+            placeholder="e.g., 300"
+            value={warningData.temperature.checkInterval}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*$/.test(value)) {
+                handleWarningChange("temperature", "checkInterval", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        {/* ===== CURRENT ===== */}
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="currentHigh" className="text-right">Current High</Label>
+          <Input
+            id="currentHigh"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 120"
+            value={warningData.current.high}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("current", "high", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="currentLow" className="text-right">Current Low</Label>
+          <Input
+            id="currentLow"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 10"
+            value={warningData.current.low}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value)) {
+                handleWarningChange("current", "low", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="currentInterval" className="text-right">Check Interval (s)</Label>
+          <Input
+            id="currentInterval"
+            type="number"
+            min="0"
+            placeholder="e.g., 180"
+            value={warningData.current.checkInterval}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*$/.test(value)) {
+                handleWarningChange("current", "checkInterval", value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
+            className="col-span-3"
+            required
+          />
+        </div>
+
+      </div>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button type="button" variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Creating..." : "Create Warning"}
+        </Button>
+      </DialogFooter>
+    </form>
+  </DialogContent>
+</Dialog>
+
 
 			{/* View Warnings Dialog */}
 			<Dialog open={showViewWarningsDialog} onOpenChange={setShowViewWarningsDialog}>
@@ -521,6 +627,83 @@ console.log("User Stations:", userStations);
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+			{/* View Devices Dialog */}
+<Dialog open={showDevicesDialog} onOpenChange={setShowDevicesDialog}>
+  <DialogContent className="sm:max-w-[500px]">
+    <DialogHeader>
+      <DialogTitle>Connected Devices</DialogTitle>
+      <DialogDescription>
+        Devices currently connected to this station.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="py-4">
+      {selectedStationId &&
+      stations.find((s) => s._id === selectedStationId)?.devices?.length ? (
+        <ul className="list-disc pl-6 space-y-2">
+          {stations
+            .find((s) => s._id === selectedStationId)!
+            .devices.map((device, index) => (
+              <li key={index} className="text-sm font-medium">
+                {device}
+              </li>
+            ))}
+        </ul>
+      ) : (
+        <p className="text-center text-muted-foreground">
+          No devices connected to this station.
+        </p>
+      )}
+    </div>
+    <DialogFooter>
+      <DialogClose asChild>
+        <Button type="button" variant="outline">
+          Close
+        </Button>
+      </DialogClose>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+{/* View Users Dialog */}
+<Dialog open={showUsersDialog} onOpenChange={setShowUsersDialog}>
+  <DialogContent className="sm:max-w-[500px]">
+    <DialogHeader>
+      <DialogTitle>Assigned Users</DialogTitle>
+      <DialogDescription>
+        Users assigned to this station.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="py-4">
+      {selectedStationId &&
+      stations.find((s) => s._id === selectedStationId)?.assignments?.length ? (
+        <ul className="list-disc pl-6 space-y-2">
+          {stations
+            .find((s) => s._id === selectedStationId)!
+            .assignments.map((assignment, index) => (
+              <li key={index} className="text-sm">
+                <div className="font-semibold">{assignment.user?.email}</div>
+                <div className="text-muted-foreground text-xs">
+                  User ID: {assignment.user?.user_id}
+                </div>
+              </li>
+            ))}
+        </ul>
+      ) : (
+        <p className="text-center text-muted-foreground">
+          No users assigned to this station.
+        </p>
+      )}
+    </div>
+    <DialogFooter>
+      <DialogClose asChild>
+        <Button type="button" variant="outline">
+          Close
+        </Button>
+      </DialogClose>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
 		</div>
 	);
 }
