@@ -30,6 +30,7 @@ import * as XLSX from "xlsx";
 import type { BatteryStateReportParams } from "@/api/services/telemetryService";
 import { API_BASE_URL } from "@/global-config";
 
+
 const PARAMETERS = [
   { key: "chargingCurrent", label: "Charging Current" },
   { key: "bankVoltage", label: "Bank Voltage" },
@@ -446,11 +447,13 @@ setLogData(transformed);
       </Card>
 
             {/* Battery Logs Charts/Table */}
-            <Card>
+         <Card>
   <CardHeader>
     <div className="flex flex-col">
       <CardTitle className="text-xl font-semibold">Battery Logs</CardTitle>
-      <p className="text-gray-600 text-sm mt-1">Bank: <span className="font-medium text-gray-800">IPS BATT BANK</span></p>
+      <p className="text-gray-600 text-sm mt-1">
+        Bank: <span className="font-medium text-gray-800">IPS BATT BANK</span>
+      </p>
     </div>
 
     {/* Date Range */}
@@ -460,7 +463,9 @@ setLogData(transformed);
         <input
           type="date"
           value={logDateRange.from || ""}
-          onChange={(e) => setLogDateRange((prev) => ({ ...prev, from: e.target.value }))}
+          onChange={(e) =>
+            setLogDateRange((prev) => ({ ...prev, from: e.target.value }))
+          }
           className="border rounded px-2 py-1 shadow-sm"
         />
       </div>
@@ -470,7 +475,9 @@ setLogData(transformed);
         <input
           type="date"
           value={logDateRange.to || ""}
-          onChange={(e) => setLogDateRange((prev) => ({ ...prev, to: e.target.value }))}
+          onChange={(e) =>
+            setLogDateRange((prev) => ({ ...prev, to: e.target.value }))
+          }
           className="border rounded px-2 py-1 shadow-sm"
         />
       </div>
@@ -515,7 +522,6 @@ setLogData(transformed);
   </CardHeader>
 
   <CardContent>
-    {/* GRAPH VIEW */}
     {logView === "graph" ? (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {selectedParams.map((param) => (
@@ -528,65 +534,95 @@ setLogData(transformed);
 
             <CardContent style={{ height: 320 }}>
               {logData.length === 0 ? (
-                // shimmer/skeleton effect
                 <div className="animate-pulse h-full flex items-center justify-center text-gray-400">
-                  <div className="w-3/4 h-40 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-md"></div>
+                  <div className="w-3/4 h-40 bg-gray-200 rounded-md"></div>
                 </div>
               ) : (
-               <ResponsiveContainer width="100%" height="100%">
-  <LineChart data={logData} margin={{ top: 20, right: 25, left: -10, bottom: 10 }}>
-    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-    <XAxis
-      dataKey="timestamp"
-      tickFormatter={(val) =>
-        new Date(val).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      }
-      tick={{ fontSize: 11, fill: "#6b7280" }}
-      axisLine={false}
-      tickLine={false}
-    />
-    <YAxis
-      tick={{ fontSize: 11, fill: "#6b7280" }}
-      axisLine={false}
-      tickLine={false}
-      width={40}
-    />
-    <Tooltip
-      contentStyle={{
-        backgroundColor: "white",
-        border: "1px solid #e5e7eb",
-        borderRadius: "8px",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-      }}
-      labelStyle={{ color: "#374151", fontWeight: 500 }}
-      itemStyle={{ color: "#2563eb" }}
-      labelFormatter={(val) => new Date(val).toLocaleString()}
-    />
-    <Legend
-      wrapperStyle={{
-        fontSize: "12px",
-        paddingTop: "10px",
-        color: "#6b7280",
-      }}
-    />
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={logData}
+                    margin={{ top: 20, right: 25, left: -10, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="timestamp"
+                      tickFormatter={(val) =>
+                        new Date(val).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      }
+                      tick={{ fontSize: 11, fill: "#6b7280" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#6b7280" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={40}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "8px",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                      }}
+                      labelStyle={{ color: "#374151", fontWeight: 500 }}
+                      itemStyle={{
+                        color:
+                          param === "chargingCurrent"
+                            ? "#28a745"
+                            : param === "dischargingCurrent"
+                            ? "#dc3545"
+                             : param === "bankVoltage"   
+                            ? "#007bff"
+                            : "#fd7e14",
+                      }}
+                      labelFormatter={(val) => new Date(val).toLocaleString()}
+                    />
+                    <Legend
+                      wrapperStyle={{
+                        fontSize: "12px",
+                        paddingTop: "10px",
+                        color: "#6b7280",
+                      }}
+                    />
 
-    <Line
-      type="monotone"
-      dataKey={param}
-      stroke="#60a5fa"       // mild blue outline
-      strokeWidth={2.2}
-      dot={false}
-      activeDot={{
-        r: 5,
-        fill: "#3b82f6",
-        stroke: "#ffffff",
-        strokeWidth: 2,
-      }}
-    />
-  </LineChart>
-</ResponsiveContainer>
+                   <Line
+  type="monotone"
+  dataKey={param}
+  stroke={
+    param === "chargingCurrent"
+      ? "#28a745"
+      : param === "dischargingCurrent"
+      ? "#dc3545"
+      : param === "bankVoltage"
+      ? "#007bff"
+      : "#fd7e14"
+  }
+  strokeWidth={2.5}
+  dot={false}
+  fill="none"
+  fillOpacity={0}
+  activeDot={{
+    r: 5,
+    fill:
+      param === "chargingCurrent"
+        ? "#28a745"
+        : param === "dischargingCurrent"
+        ? "#dc3545"
+        : param === "bankVoltage"
+        ? "#007bff"
+        : "#fd7e14",
+    stroke: "#ffffff",
+    strokeWidth: 2,
+  }}
+/>
 
-
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
@@ -626,7 +662,9 @@ setLogData(transformed);
       </div>
     )}
   </CardContent>
-  </Card>
+</Card>
+
+
 
 
       
@@ -643,13 +681,26 @@ setLogData(transformed);
         <YAxis />
         <Tooltip />
         <Legend />
-        <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} name="Voltage (V)" />
-        <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
-        <Line type="monotone" dataKey="batteryTemp" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+        <Line
+          type="monotone"
+          dataKey="voltage"
+          stroke="#3b82f6"
+          strokeWidth={2}
+          name="Voltage (V)"
+        />
+        <Line
+          type="monotone"
+          dataKey="batteryTemp"  // <-- use only this one
+          stroke="#ef4444"
+          strokeWidth={2}
+          name="Temperature (°C)"
+        />
+        {/* Removed the duplicate <Line dataKey="temperature" ... /> */}
       </LineChart>
     </ResponsiveContainer>
   </CardContent>
 </Card>
+
 
 
       {/* Battery State Report Table */}
