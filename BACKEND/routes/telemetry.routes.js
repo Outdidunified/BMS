@@ -11,3 +11,5 @@ thz.get('/battery-state-export', authenticate, authorize('view_telemetry'), batt
 thz.get('/battery/logs', authenticate, authorize('view_telemetry'), batteryLogs);
 
 export default thz;
+
+

@@ -9,6 +9,7 @@ import roleRoutes from './routes/role.routes.js';
 import devicesRoutes from './routes/devices.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
 import telemetryRoutes from './routes/telemetry.routes.js';
 import dataRoutes from './routes/data.routes.js';
 import stationRoutes from './routes/station.routes.js';
@@ -90,6 +91,10 @@ apiApp.get('/docs', (_req, res) => {
             analytics: {
                 summary: 'GET /analytics/summary?di=&from=&to=',
             },
+            dashboard: {
+                summary: 'GET /dashboard/summary',
+                charts: 'GET /dashboard/charts',
+            },
             telemetry: {
                 latest: 'GET /telemetry/latest?di=',
                 range: 'GET /telemetry/range?di=&from=&to=&limit=',
@@ -127,6 +132,7 @@ apiApp.use('/roles', roleRoutes);
 apiApp.use('/devices', devicesRoutes);
 apiApp.use('/notifications', notificationsRoutes);
 apiApp.use('/analytics', analyticsRoutes);
+apiApp.use('/dashboard', dashboardRoutes);
 apiApp.use('/telemetry', telemetryRoutes);
 apiApp.use('/stations', stationRoutes);
 apiApp.use('/warnings', warningRoutes);
@@ -162,6 +168,7 @@ async function start() {
                     view_devices: true,
                     view_telemetry: true,
                     view_analytics: true,
+                    view_dashboard: true,
                     manage_notifications: true,
                     manage_warnings: true
                 },
@@ -177,6 +184,7 @@ async function start() {
                     view_devices: true,
                     view_telemetry: true,
                     view_analytics: false,
+                    view_dashboard: true,
                     manage_notifications: false,
                     manage_warnings: true
                 },

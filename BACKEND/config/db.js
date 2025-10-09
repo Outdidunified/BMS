@@ -43,6 +43,12 @@ export async function connectDB() {
             logger.loggerInfo('Created collection telemetry_cycles');
         }
 
+        const warningHistoryCollections = await db.listCollections({ name: 'warning_history' }).toArray();
+        if (warningHistoryCollections.length === 0) {
+            await db.createCollection('warning_history');
+            logger.loggerInfo('Created collection warning_history');
+        }
+
         // Ensure indexes for performance & uniqueness
         await db.collection('devices').createIndex({ deviceId: 1 }, { unique: true, sparse: true });
         await db.collection('devices').createIndex({ macId: 1 }, { unique: true, sparse: true });
@@ -50,6 +56,9 @@ export async function connectDB() {
         await db.collection('battery_data').createIndex({ 'deviceFull.deviceId': 1, timestamp: -1 });
         await db.collection('telemetry_cycles').createIndex({ deviceId: 1, startTimestamp: -1 });
         await db.collection('telemetry_cycles').createIndex({ deviceId: 1, state: 1 });
+        await db.collection('warning_history').createIndex({ deviceId: 1, timestamp: -1 });
+        await db.collection('warning_history').createIndex({ stationId: 1, timestamp: -1 });
+        await db.collection('warning_history').createIndex({ resolved: 1 });
     } catch (err) {
         logger.loggerError(`MongoDB connection error: ${err.message || err}`);
         throw err;
@@ -68,6 +77,7 @@ export function collections() {
         telemetryCycles: d.collection('telemetry_cycles'),
         devices: d.collection('devices'),
         notifications: d.collection('notifications'),
+        warningHistory: d.collection('warning_history'),
     };
 }
 

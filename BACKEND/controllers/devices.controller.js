@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../config/db.js';
 import Device from '../data/Device.model.js';
 import User from '../data/User.model.js';
+import Station from '../data/Station.model.js';
 import StationAssignment from '../data/StationAssignment.model.js';
 import DeviceAssignment from '../data/DeviceAssignment.model.js';
 import logger from '../utils/logger.js';
@@ -159,6 +160,29 @@ export async function listDevices(req, res) {
         }
 
         const devices = await Device.find(devicesFilter);
+
+        // Fetch station details for devices with station_id
+        const stationIds = [...new Set(devices.map(d => d.station_id).filter(Boolean))];
+        if (stationIds.length > 0) {
+            try {
+                const db = getDb();
+                const stations = await db.collection('stations').find({ _id: { $in: stationIds.map(id => new ObjectId(id)) } }).toArray();
+                const stationMap = new Map(stations.map(s => [s._id.toString(), s]));
+                devices.forEach(device => {
+                    if (device.station_id && stationMap.has(device.station_id.toString())) {
+                        const station = stationMap.get(device.station_id.toString());
+                        device.stationDetails = {
+                            _id: station._id,
+                            station_id: station.station_id,
+                            name: station.name
+                        };
+                        device.warningSettings = station.warnings;
+                    }
+                });
+            } catch (error) {
+                logger.loggerWarn(`Failed to fetch stations for devices: ${error.message}`);
+            }
+        }
 
         logger.loggerInfo(`Devices listed count=${devices.length} includeInactive=${includeInactive} role=${req.user?.role}`);
         return res.ok(devices, 'Devices');

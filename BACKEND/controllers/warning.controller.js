@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb';
 import { getDb } from '../config/db.js';
 import Station from '../data/Station.model.js';
+import Warning from '../data/Warning.model.js';
+import WarningHistory from '../data/WarningHistory.model.js';
 import logger from '../utils/logger.js';
 
 const warningCategories = new Set(['cellVoltage', 'temperature', 'current']);
@@ -237,6 +239,90 @@ export const deleteStationWarningCategory = async (req, res) => {
         res.ok(buildWarningResponse({ warnings: nextWarnings }, stationId), 'Station warning category deleted successfully');
     } catch (error) {
         logger.loggerError(`Delete station warning category error: ${error.message}`);
+        res.fail('Internal server error', 500);
+    }
+};
+
+export const getDeviceWarnings = async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+
+        if (!deviceId) {
+            return res.fail('deviceId is required', 400);
+        }
+
+        const db = getDb();
+        const warningModel = new Warning(db);
+
+        const warnings = await warningModel.findByDeviceId(deviceId);
+        if (!warnings) {
+            return res.fail('No warnings configured for this device', 404);
+        }
+
+        res.ok(warnings, 'Device warnings retrieved successfully');
+    } catch (error) {
+        logger.loggerError(`Get device warnings error: ${error.message}`);
+        res.fail('Internal server error', 500);
+    }
+};
+
+export const setDeviceWarnings = async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const { thresholds } = req.body || {};
+
+        if (!deviceId) {
+            return res.fail('deviceId is required', 400);
+        }
+
+        if (!thresholds || typeof thresholds !== 'object') {
+            return res.fail('thresholds must be an object', 400);
+        }
+
+        const db = getDb();
+        const warningModel = new Warning(db);
+
+        await warningModel.upsertByDeviceId(deviceId, thresholds);
+
+        logger.loggerInfo(`Warnings set for device ${deviceId}`);
+        res.ok({ deviceId, thresholds }, 'Device warnings set successfully');
+    } catch (error) {
+        logger.loggerError(`Set device warnings error: ${error.message}`);
+        res.fail('Internal server error', 500);
+    }
+};
+
+export const getWarningHistory = async (req, res) => {
+    try {
+        const { deviceId, stationId, resolved } = req.query;
+        const page = Math.max(1, parseInt(req.query.page || '1', 10));
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10)));
+
+        const match = {};
+        if (deviceId) match.deviceId = deviceId;
+        if (stationId) match.stationId = stationId;
+        if (resolved !== undefined) match.resolved = resolved === 'true';
+
+        const docs = await WarningHistory.collection
+            .find(match)
+            .sort({ timestamp: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .toArray();
+
+        const total = await WarningHistory.collection.countDocuments(match);
+
+        res.ok({
+            warnings: docs,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit),
+            },
+        }, 'Warning history retrieved successfully');
+    } catch (error) {
+        logger.loggerError(`Get warning history error: ${error.message}`);
         res.fail('Internal server error', 500);
     }
 };
