@@ -168,6 +168,39 @@ export async function listDevices(req, res) {
     }
 }
 
+export async function getDevicesByStation(req, res) {
+    try {
+        const stationId = String(req.params.stationId || '').trim();
+        if (!stationId) return res.fail('Station ID is required.', 400);
+
+        const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
+        const baseFilter = includeInactive ? {} : { $or: [{ status: true }, { status: { $exists: false } }] };
+
+        let devicesFilter = {
+            ...baseFilter,
+            station_id: stationId,
+        };
+
+        if (!isSuperAdmin(req.user)) {
+            const stationScope = await resolveStationScope(req.user);
+
+            if (!stationScope.includes(stationId)) {
+                return res.fail('Access denied to this station.', 403);
+            }
+
+            // Filter already applied
+        }
+
+        const devices = await Device.find(devicesFilter);
+
+        logger.loggerInfo(`getDevicesByStation stationId=${stationId} count=${devices.length} includeInactive=${includeInactive} role=${req.user?.role}`);
+        return res.ok(devices, 'Devices fetched successfully.');
+    } catch (err) {
+        logger.loggerError(`getDevicesByStation error: ${err.message || err}`);
+        res.status(500).json({ error: 'failed to fetch devices' });
+    }
+}
+
 export async function getDevice(req, res) {
     try {
         const diParam = String(req.params.di || '').trim();

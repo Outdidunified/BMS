@@ -1,5 +1,7 @@
 import Telemetry from '../data/Telemetry.model.js';
 import TelemetryCycle from '../data/TelemetryCycle.model.js';
+import Device from '../data/Device.model.js';
+import { getDb } from '../config/db.js';
 import logger from '../utils/logger.js';
 
 const RATED_CAPACITY_AH = 60;
@@ -280,5 +282,112 @@ export async function batteryStateExport(req, res) {
     } catch (err) {
         logger.loggerError(`batteryStateExport error: ${err.message || err}`);
         return res.fail('Unable to fetch battery state export. Please try again later.', 500);
+    }
+}
+
+export async function batteryLogs(req, res) {
+    try {
+        const di = String(req.query.deviceId || '').trim();
+        if (!di) return res.fail('The \'di\' query parameter is required.', 400);
+
+        const startDate = parseDateMaybe(req.query.startDate);
+        const endDate = parseDateMaybe(req.query.endDate);
+        const bankNameFilter = String(req.query.bankName || '').trim();
+
+        // Find device
+        const device = await Device.findOne({ $or: [{ deviceId: di }, { DI: di }] });
+        if (!device) return res.fail('Device not found.', 404);
+
+        // Get station to determine bankName
+        const db = getDb();
+        let actualBankName = DEFAULT_BANK_NAME;
+        if (device.station_id) {
+            const station = await db.collection('stations').findOne({ station_id: Number(device.station_id) });
+            if (station && station.name) actualBankName = station.name;
+        }
+
+        // If bankName provided and doesn't match, fail
+        if (bankNameFilter && bankNameFilter !== actualBankName) {
+            return res.fail('Bank name does not match device\'s bank.', 400);
+        }
+
+        // Fetch telemetry
+        const match = { $or: [{ 'device.DI': di }, { 'deviceFull.deviceId': di }] };
+        if (startDate || endDate) {
+            match.timestamp = {};
+            if (startDate) match.timestamp.$gte = startDate;
+            if (endDate) match.timestamp.$lte = endDate;
+        }
+
+        const docs = await Telemetry.collection
+            .find(match)
+            .sort({ timestamp: 1 })
+            .toArray();
+
+        // Aggregate parameters
+        const parameters = {
+            chargingCurrent: [],
+            dischargingCurrent: [],
+            bankVoltage: [],
+            batteryVoltages: {},
+            batteryTemperature: [],
+            ambientTemperature: [],
+            loadCurrent: [],
+            resistance: [],
+        };
+
+        docs.forEach(doc => {
+            const telemetry = doc.telemetry || {};
+            const ts = doc.timestamp.toISOString();
+
+            parameters.chargingCurrent.push({ timestamp: ts, value: Number(telemetry?.currents?.charging || 0) });
+            parameters.dischargingCurrent.push({ timestamp: ts, value: Number(telemetry?.currents?.discharging || 0) });
+            parameters.loadCurrent.push({ timestamp: ts, value: Number(telemetry?.currents?.load || 0) });
+            parameters.bankVoltage.push({ timestamp: ts, value: Number(telemetry?.packVoltage || 0) });
+
+            // Voltages
+            if (telemetry.voltages) {
+                if (Array.isArray(telemetry.voltages)) {
+                    telemetry.voltages.forEach((v, i) => {
+                        const key = `battery${i + 1}`;
+                        if (!parameters.batteryVoltages[key]) parameters.batteryVoltages[key] = [];
+                        parameters.batteryVoltages[key].push({ timestamp: ts, value: Number(v) });
+                    });
+                } else if (typeof telemetry.voltages === 'object') {
+                    Object.keys(telemetry.voltages).forEach(key => {
+                        if (!parameters.batteryVoltages[key]) parameters.batteryVoltages[key] = [];
+                        parameters.batteryVoltages[key].push({ timestamp: ts, value: Number(telemetry.voltages[key]) });
+                    });
+                }
+            }
+
+            // Temperatures
+            if (Array.isArray(telemetry.temperatures)) {
+                telemetry.temperatures.forEach((t, i) => {
+                    if (i === 0) {
+                        parameters.batteryTemperature.push({ timestamp: ts, value: Number(t) });
+                    } else if (i === 1) {
+                        parameters.ambientTemperature.push({ timestamp: ts, value: Number(t) });
+                    }
+                });
+            }
+
+            // Resistance if available
+            if (telemetry.resistance !== undefined) {
+                parameters.resistance.push({ timestamp: ts, value: Number(telemetry.resistance) });
+            }
+        });
+
+        const response = {
+            bankName: actualBankName,
+            startDate: startDate ? startDate.toISOString() : null,
+            endDate: endDate ? endDate.toISOString() : null,
+            parameters,
+        };
+
+        return res.ok(response, 'Battery logs fetched successfully.');
+    } catch (err) {
+        logger.loggerError(`batteryLogs error: ${err.message || err}`);
+        return res.fail('Unable to fetch battery logs. Please try again later.', 500);
     }
 }
