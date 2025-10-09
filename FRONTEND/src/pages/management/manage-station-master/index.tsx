@@ -1118,22 +1118,39 @@ const handleUnassignDevice = async ({
                   <Icon icon="mdi:pencil" size={16} />
                 </Button>
                <Dialog>
-  <DialogTrigger asChild>
-    <Button variant="ghost" size="sm" title="View warnings">
-      <Icon
-        icon="mdi:alert"
-        size={16}
-        className={
-          station.warnings &&
-          (station.warnings.cellVoltage ||
-            station.warnings.temperature ||
-            station.warnings.current)
-            ? "text-yellow-500 animate-pulse"
-            : "text-gray-400"
-        }
-      />
-    </Button>
-  </DialogTrigger>
+<DialogTrigger asChild>
+  <Button
+    variant="ghost"
+    size="sm"
+    title={
+      station.warnings &&
+      Object.keys(station.warnings).length > 0
+        ? "View warnings"
+        : "No warnings configured"
+    }
+    disabled={
+      !(station.warnings &&
+      Object.keys(station.warnings).length > 0)
+    }
+  >
+    <Icon
+      icon={
+        station.warnings &&
+        Object.keys(station.warnings).length > 0
+          ? "mdi:alert" // Show alert icon if warnings exist
+          : "mdi:close" // Show close icon if no warnings
+      }
+      size={16}
+      className={
+        station.warnings &&
+        Object.keys(station.warnings).length > 0
+          ? "text-yellow-500 animate-pulse" // Highlighted if warnings exist
+          : "text-gray-400" // Dim if no warnings
+      }
+    />
+  </Button>
+</DialogTrigger>
+
 
   <DialogContent className="max-w-md">
     <DialogHeader>
