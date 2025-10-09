@@ -446,8 +446,7 @@ setLogData(transformed);
       </Card>
 
             {/* Battery Logs Charts/Table */}
-      {/* Battery Logs Charts/Table */}
-<Card>
+            <Card>
   <CardHeader>
     <div className="flex flex-col">
       <CardTitle className="text-xl font-semibold">Battery Logs</CardTitle>
@@ -534,41 +533,60 @@ setLogData(transformed);
                   <div className="w-3/4 h-40 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-md"></div>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={logData}>
-                    <defs>
-                      <linearGradient id={`gradient-${param}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="timestamp"
-                      tickFormatter={(val) =>
-                        new Date(val).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                      }
-                      tick={{ fontSize: 11 }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}
-                      labelFormatter={(val) => new Date(val).toLocaleString()}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Line
-                      type="monotone"
-                      dataKey={param}
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={false}
-                      fillOpacity={1}
-                      fill={`url(#gradient-${param})`}
-                      activeDot={{ r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+               <ResponsiveContainer width="100%" height="100%">
+  <LineChart data={logData} margin={{ top: 20, right: 25, left: -10, bottom: 10 }}>
+    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+    <XAxis
+      dataKey="timestamp"
+      tickFormatter={(val) =>
+        new Date(val).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      }
+      tick={{ fontSize: 11, fill: "#6b7280" }}
+      axisLine={false}
+      tickLine={false}
+    />
+    <YAxis
+      tick={{ fontSize: 11, fill: "#6b7280" }}
+      axisLine={false}
+      tickLine={false}
+      width={40}
+    />
+    <Tooltip
+      contentStyle={{
+        backgroundColor: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+      }}
+      labelStyle={{ color: "#374151", fontWeight: 500 }}
+      itemStyle={{ color: "#2563eb" }}
+      labelFormatter={(val) => new Date(val).toLocaleString()}
+    />
+    <Legend
+      wrapperStyle={{
+        fontSize: "12px",
+        paddingTop: "10px",
+        color: "#6b7280",
+      }}
+    />
+
+    <Line
+      type="monotone"
+      dataKey={param}
+      stroke="#60a5fa"       // mild blue outline
+      strokeWidth={2.2}
+      dot={false}
+      activeDot={{
+        r: 5,
+        fill: "#3b82f6",
+        stroke: "#ffffff",
+        strokeWidth: 2,
+      }}
+    />
+  </LineChart>
+</ResponsiveContainer>
+
+
               )}
             </CardContent>
           </Card>
@@ -608,31 +626,31 @@ setLogData(transformed);
       </div>
     )}
   </CardContent>
-</Card>
+  </Card>
 
 
       
       {/* Combined Voltage and Temperature Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Cell Voltages & Temperature Sensors</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={combinedChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="index" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} name="Voltage (V)" />
-              <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
-              <Line type="monotone" dataKey="batteryTemp" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+<Card>
+  <CardHeader>
+    <CardTitle>Cell Voltages & Temperature Sensors</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={combinedChartData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="index" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} name="Voltage (V)" />
+        <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+        <Line type="monotone" dataKey="batteryTemp" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+      </LineChart>
+    </ResponsiveContainer>
+  </CardContent>
+</Card>
 
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
 
       {/* Battery State Report Table */}
       <Card>
