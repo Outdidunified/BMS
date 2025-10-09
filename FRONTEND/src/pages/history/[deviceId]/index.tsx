@@ -30,6 +30,14 @@ import * as XLSX from "xlsx";
 import type { BatteryStateReportParams } from "@/api/services/telemetryService";
 import { API_BASE_URL } from "@/global-config";
 
+const PARAMETERS = [
+  { key: "chargingCurrent", label: "Charging Current" },
+  { key: "bankVoltage", label: "Bank Voltage" },
+  { key: "batteryTemp", label: "Battery Temperature" },
+  { key: "dischargingCurrent", label: "Discharge Current" },
+];
+
+
 interface TelemetryData {
   timestamp: string;
   deviceFull: {
@@ -95,6 +103,16 @@ export default function DeviceHistoryDetail() {
   const [exportMode, setExportMode] = useState<'all' | 'daterange' | 'charging' | 'discharging'>('all');
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({});
   const [isExporting, setIsExporting] = useState(false);
+    // Add this below your existing useState hooks
+  const [selectedParams, setSelectedParams] = useState<string[]>(["chargingCurrent", "bankVoltage"]);
+  const [logData, setLogData] = useState<any[]>([]);
+  const [bankList, setBankList] = useState<string[]>([]);
+  // const [selectedBank, setSelectedBank] = useState<string>("");
+  const [selectedBank, setSelectedBank] = useState<string>("IPS BATT BANK");
+
+  const [logDateRange, setLogDateRange] = useState<{ from?: string; to?: string }>({});
+  const [logView, setLogView] = useState<"graph" | "table">("graph");
+
 
   const loadBatteryReport = useCallback(async () => {
     if (!deviceId) return;
@@ -119,6 +137,46 @@ export default function DeviceHistoryDetail() {
     }
   }, [deviceId, exportMode, dateRange.from, dateRange.to, page, pageSize]);
 
+    const loadBatteryLogs = useCallback(async () => {
+    if (!deviceId || !selectedBank) return;
+
+    try {
+      const token = sessionStorage.getItem("authToken");
+     const res = await fetch(
+  `http://192.168.0.62:8070/telemetry/battery/logs?deviceId=${deviceId}&bank=${selectedBank}&from=${logDateRange.from}&to=${logDateRange.to}`,
+  { headers: { Authorization: `Bearer ${token}` } }
+);
+
+      const result = await res.json();
+
+      if (result.success && result.data && result.data.parameters) {
+       const timestamps = result.data.parameters.chargingCurrent.map((p: any) => p.timestamp);
+       const transformed = timestamps.map((t: string, i: number) => {
+  const obj: any = { timestamp: t };
+  
+  PARAMETERS.forEach((param) => {
+    obj[param.key] = result.data.parameters[param.key]?.[i]?.value ?? null;
+  });
+
+  // Add temperature
+  // obj.temperature = result.data.parameters.batteryTemperature?.[i]?.value ?? null;
+  obj["batteryTemp"] = result.data.parameters.batteryTemperature?.[i]?.value ?? null;
+
+
+  return obj;
+});
+
+setLogData(transformed);
+
+setLogData(transformed);
+        setBankList([result.data.bankName]);
+      }
+    } catch (err) {
+      console.error("Error fetching battery logs:", err);
+    }
+  }, [deviceId, selectedBank, logDateRange]);
+
+
   useEffect(() => {
     const fetchTelemetry = async () => {
       if (!deviceId) return;
@@ -132,6 +190,9 @@ export default function DeviceHistoryDetail() {
           },
         });
         const result = await res.json();
+        console.log("Battery Logs Response:", result);
+
+        
 
         if (result.success && result.data) {
           setData(result.data);
@@ -153,14 +214,32 @@ export default function DeviceHistoryDetail() {
     loadBatteryReport();
   }, [loadBatteryReport]);
 
-  const combinedChartData = useMemo(() => {
-    if (!data) return [];
-    return data.telemetry.voltages.map((voltage, index) => ({
-      index: index + 1,
-      voltage,
-      temperature: data.telemetry.temperatures[index] || null,
-    }));
-  }, [data]);
+    useEffect(() => {
+    loadBatteryLogs();
+  }, [selectedBank, logDateRange, loadBatteryLogs]);
+
+  useEffect(() => {
+  if (!selectedBank && deviceId) {
+    setSelectedBank("IPS BATT BANK"); // or fetch dynamically from backend
+  }
+}, [deviceId, selectedBank]);
+
+  useEffect(() => {
+  if (bankList.length && !selectedBank) {
+    setSelectedBank(bankList[0]);
+  }
+}, [bankList, selectedBank]);
+
+
+
+ const combinedChartData = useMemo(() => {
+  if (!data) return [];
+  return data.telemetry.voltages.map((voltage, index) => ({
+    index: index + 1,
+    voltage,
+    batteryTemp: data.telemetry.temperatures[index] || null, // use same key
+  }));
+}, [data]);
 
   const handleExportToExcel = useCallback(async () => {
     if (!deviceId || isExporting) return;
@@ -365,6 +444,174 @@ export default function DeviceHistoryDetail() {
           </div>
         </CardContent>
       </Card>
+
+            {/* Battery Logs Charts/Table */}
+      {/* Battery Logs Charts/Table */}
+<Card>
+  <CardHeader>
+    <div className="flex flex-col">
+      <CardTitle className="text-xl font-semibold">Battery Logs</CardTitle>
+      <p className="text-gray-600 text-sm mt-1">Bank: <span className="font-medium text-gray-800">IPS BATT BANK</span></p>
+    </div>
+
+    {/* Date Range */}
+    <div className="flex flex-wrap gap-4 mt-4 items-end">
+      <div className="flex flex-col">
+        <label className="text-sm font-medium text-gray-700 mb-1">Start Date</label>
+        <input
+          type="date"
+          value={logDateRange.from || ""}
+          onChange={(e) => setLogDateRange((prev) => ({ ...prev, from: e.target.value }))}
+          className="border rounded px-2 py-1 shadow-sm"
+        />
+      </div>
+
+      <div className="flex flex-col">
+        <label className="text-sm font-medium text-gray-700 mb-1">End Date</label>
+        <input
+          type="date"
+          value={logDateRange.to || ""}
+          onChange={(e) => setLogDateRange((prev) => ({ ...prev, to: e.target.value }))}
+          className="border rounded px-2 py-1 shadow-sm"
+        />
+      </div>
+
+      <div className="flex gap-2 mt-2">
+        <Button
+          size="sm"
+          variant={logView === "graph" ? "default" : "outline"}
+          onClick={() => setLogView("graph")}
+        >
+          View Graphs
+        </Button>
+        <Button
+          size="sm"
+          variant={logView === "table" ? "default" : "outline"}
+          onClick={() => setLogView("table")}
+        >
+          View Table
+        </Button>
+      </div>
+    </div>
+
+    {/* Parameter Checkboxes */}
+    <div className="flex flex-wrap gap-4 mt-4">
+      {PARAMETERS.map((p) => (
+        <label key={p.key} className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={selectedParams.includes(p.key)}
+            onChange={() =>
+              setSelectedParams((prev) =>
+                prev.includes(p.key)
+                  ? prev.filter((v) => v !== p.key)
+                  : [...prev, p.key]
+              )
+            }
+          />
+          {p.label}
+        </label>
+      ))}
+    </div>
+  </CardHeader>
+
+  <CardContent>
+    {/* GRAPH VIEW */}
+    {logView === "graph" ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {selectedParams.map((param) => (
+          <Card key={param} className="shadow-md border border-gray-100">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">
+                {PARAMETERS.find((p) => p.key === param)?.label}
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent style={{ height: 320 }}>
+              {logData.length === 0 ? (
+                // shimmer/skeleton effect
+                <div className="animate-pulse h-full flex items-center justify-center text-gray-400">
+                  <div className="w-3/4 h-40 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 rounded-md"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={logData}>
+                    <defs>
+                      <linearGradient id={`gradient-${param}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="timestamp"
+                      tickFormatter={(val) =>
+                        new Date(val).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      }
+                      tick={{ fontSize: 11 }}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}
+                      labelFormatter={(val) => new Date(val).toLocaleString()}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Line
+                      type="monotone"
+                      dataKey={param}
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      fillOpacity={1}
+                      fill={`url(#gradient-${param})`}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    ) : (
+      // TABLE VIEW
+      <div className="border rounded-lg overflow-hidden mt-4">
+        <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+          <table className="w-full border-collapse">
+            <thead className="bg-gray-100 sticky top-0 z-10">
+              <tr>
+                <th className="border px-2 py-1 text-left text-sm">Timestamp</th>
+                {selectedParams.map((p) => (
+                  <th key={p} className="border px-2 py-1 text-left text-sm">
+                    {PARAMETERS.find((x) => x.key === p)?.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {logData.map((row, i) => (
+                <tr key={i} className="hover:bg-gray-50">
+                  <td className="border px-2 py-1 text-sm">
+                    {new Date(row.timestamp).toLocaleString()}
+                  </td>
+                  {selectedParams.map((p) => (
+                    <td key={p} className="border px-2 py-1 text-sm text-center">
+                      {row[p] ?? "-"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
+
+      
       {/* Combined Voltage and Temperature Chart */}
       <Card>
         <CardHeader>
@@ -380,6 +627,8 @@ export default function DeviceHistoryDetail() {
               <Legend />
               <Line type="monotone" dataKey="voltage" stroke="#3b82f6" strokeWidth={2} name="Voltage (V)" />
               <Line type="monotone" dataKey="temperature" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+              <Line type="monotone" dataKey="batteryTemp" stroke="#ef4444" strokeWidth={2} name="Temperature (°C)" />
+
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
