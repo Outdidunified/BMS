@@ -203,7 +203,7 @@ export default function MenuLevel() {
 
   // WebSocket connection for live data
   const { connected: wsConnected, send: wsSend } = useDeviceWebSocket({
-    url: "ws://192.168.0.35:8071",
+    url: import.meta.env.VITE_APP_WS_BASE_URL,
     reconnect: true,
     reconnectDelayMs: 2000,
     onMessage: handleWebSocketMessage,
@@ -490,7 +490,7 @@ export default function MenuLevel() {
 
 useEffect(() => {
   if (currentPage === "Analytics") {
-    fetch('http://192.168.0.28:8070/analytics') // assuming endpoint
+    fetch(`${import.meta.env.VITE_APP_API_BASE_URL}/analytics`) // assuming endpoint
       .then(res => res.json())
       .then(data => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -667,46 +667,55 @@ useEffect(() => {
                 </Card>
               </div>
             )}
-            {/* Device Selection */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card>
-<CardHeader>
-  <div className="flex items-center justify-between">
-    <CardTitle>Device Selection</CardTitle>
+{/* Device Selection */}
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <Card>
+    <CardHeader>
+      <div className="flex items-center justify-between">
+        <CardTitle>Device Selection</CardTitle>
 
-    {/* When WebSocket is connected */}
-    {wsConnected ? (
-      filteredData.some(device => device.connected) ? (
-        // Case: At least one online device
-        <button
-          onClick={() => setLiveStreamingMode(!liveStreamingMode)}
-          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse hover:bg-green-600 transition-colors"
-        >
-          <Wifi size={16} />
-          Click to see online devices
-        </button>
-      ) : (
-        // Case: All devices offline
-        <button
-          className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-red-500 text-white cursor-not-allowed"
-          disabled
-        >
-          <Wifi size={16} />
-          Every device is offline
-        </button>
-      )
-    ) : (
-      // When WebSocket is disconnected
-      <button
-        className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-400 text-gray-700 cursor-not-allowed"
-        disabled
-      >
-        <Wifi size={16} />
-        Click to see online devices
-      </button>
-    )}
-  </div>
-</CardHeader>
+        {/* When WebSocket is connected */}
+        {wsConnected ? (
+          filteredData.length === 0 ? (
+            // Case: No devices available
+            <button
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-300 text-gray-700 cursor-not-allowed"
+              disabled
+            >
+              <Wifi size={16} />
+              No devices available
+            </button>
+          ) : filteredData.some((device) => device.connected) ? (
+            // Case: At least one online device
+            <button
+              onClick={() => setLiveStreamingMode(!liveStreamingMode)}
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-green-500 text-white animate-pulse hover:bg-green-600 transition-colors"
+            >
+              <Wifi size={16} />
+              Click to see online devices
+            </button>
+          ) : (
+            // Case: All devices offline
+            <button
+              className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-red-500 text-white cursor-not-allowed"
+              disabled
+            >
+              <Wifi size={16} />
+              Every device is offline
+            </button>
+          )
+        ) : (
+          // When WebSocket is disconnected
+          <button
+            className="flex items-center gap-2 px-3 py-1 rounded text-sm font-medium bg-gray-400 text-gray-700 cursor-not-allowed"
+            disabled
+          >
+            <Wifi size={16} />
+            Click to see online devices
+          </button>
+        )}
+      </div>
+    </CardHeader>
 
                 <CardContent>
                   <div className="mb-4">
