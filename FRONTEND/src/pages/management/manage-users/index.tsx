@@ -79,6 +79,10 @@ const ManageUsersPage: React.FC = () => {
   const [stationId, setStationId] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
+   // Inline edit states
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingUsername, setEditingUsername] = useState("");
+
   const token = sessionStorage.getItem("authToken");
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -118,7 +122,7 @@ const ManageUsersPage: React.FC = () => {
 
   const fetchUnassignedSummary = async () => {
     try {
-      const res = await axios.get(`http://192.168.0.28:8070/stations/unassignedSummary/`, { headers });
+      const res = await axios.get(`${API_BASE_URL}/stations/unassignedSummary/`, { headers });
       if (res.data.success) {
         setStations(res.data.data.unassignedStations || []);
         setDevices(res.data.data.unassignedDevices || []);
@@ -219,34 +223,77 @@ const ManageUsersPage: React.FC = () => {
     });
   };
 
-  const fetchUserDetails = async (userId?: string, user?: User) => {
-    if (!userId && !user) return;
+ const fetchUserDetails = async (userId?: string, user?: User) => {
+  if (!userId && !user) return;
+
+  try {
+    // Fetch user details from backend
+    const res = await axios.get(`${API_BASE_URL}/auth/getProfile`, {
+      params: { userId: userId || user?.user_id },
+      headers,
+    });
+
+    const data = res.data.success ? res.data.data : user;
+
+    // Build dynamic details for the popup
+    const htmlContent = `
+      <p><strong>Username:</strong> ${data?.username || "N/A"}</p>
+      <p><strong>Email:</strong> ${data?.email || "N/A"}</p>
+      <p><strong>Role:</strong> ${data?.role || roles.find((r) => r.role_id === data?.role_id)?.name || "N/A"}</p>
+<p>
+  <strong>Status:</strong> 
+  <span class="${data?.status ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
+    ${data?.status ? 'Active' : 'Inactive'}
+  </span>
+</p>
+      <p><strong>Created At:</strong> ${data?.createdAt ? new Date(data.createdAt).toLocaleString() : "N/A"}</p>
+      <p><strong>Updated At:</strong> ${data?.updatedAt ? new Date(data.updatedAt).toLocaleString() : "N/A"}</p>
+    `;
+
+    Swal.fire({
+      title: `User Details: ${data?.username || "N/A"}`,
+      html: htmlContent,
+      width: 500,
+      confirmButtonText: "Close",
+    });
+  } catch (err) {
+    console.error(err);
+    Swal.fire("Error", "Failed to fetch user details", "error");
+  }
+};
+
+
+    // Inline edit functions: <--- PASTE HERE
+  const startEditing = (user: User) => {
+    setEditingUserId(user._id);
+    setEditingUsername(user.username);
+  };
+
+  const cancelEdit = () => {
+    setEditingUserId(null);
+    setEditingUsername("");
+  };
+
+  const saveEditedUser = async (userId: string) => {
+    if (!editingUsername.trim()) {
+      Swal.fire("Error", "Username cannot be empty", "error");
+      return;
+    }
 
     try {
-      const res = await axios.get(`http://192.168.0.28:8070/auth/getProfile`, {
-        params: { userId: userId || user?.user_id },
-        headers,
-      });
+      const res = await axios.put(
+        `${API_BASE_URL}/auth/updateUser/${userId}`,
+        { username: editingUsername },
+        { headers }
+      );
 
-      const data = res.data.success ? res.data.data : user;
-
-      Swal.fire({
-        title: `User Details: ${data?.username || "N/A"}`,
-        html: `
-          <p><strong>Username:</strong> ${data?.username || "N/A"}</p>
-          <p><strong>Email:</strong> ${data?.email || "N/A"}</p>
-          <p><strong>Role:</strong> ${data?.role || roles.find((r) => r.role_id === user?.role_id)?.name || "N/A"}</p>
-          <p><strong>Status:</strong> ${data?.status ? "Active" : "Inactive"}</p>
-          <p><strong>Created At:</strong> ${
-            data?.createdAt ? new Date(data.createdAt).toLocaleString() : "N/A"
-          }</p>
-        `,
-        width: 500,
-        confirmButtonText: "Close",
-      });
-    } catch (err) {
-      console.error(err);
-      Swal.fire("Error", "Failed to fetch user details", "error");
+      if (res.data.success) {
+        Swal.fire("Success", "Username updated successfully", "success");
+        fetchUsers();
+        cancelEdit();
+      }
+    } catch (err: any) {
+      Swal.fire("Error", err?.response?.data?.message || "Something went wrong", "error");
     }
   };
 
@@ -316,6 +363,7 @@ const ManageUsersPage: React.FC = () => {
 </Select>
 
 {/* Device - Optional */}
+{/* Device - Optional */}
 <Select onValueChange={(val) => setDeviceId(val)}>
   <SelectTrigger className="w-full">
     <SelectValue placeholder="Select Device (Optional)" />
@@ -323,11 +371,12 @@ const ManageUsersPage: React.FC = () => {
   <SelectContent position="popper" className="w-full">
     {devices.map((device) => (
       <SelectItem key={device._id} value={device.deviceId}>
-        {device.deviceId} ({device.macId})
+        {device.deviceId}
       </SelectItem>
     ))}
   </SelectContent>
 </Select>
+
 
           </CardContent>
 
@@ -386,46 +435,87 @@ const ManageUsersPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user._id} className="hover:bg-gray-50 transition-colors">
-                  <TableCell className="p-4 font-medium">{user.username}</TableCell>
-                  <TableCell className="p-4">{user.email}</TableCell>
-                  <TableCell className="p-4">
-                    {roles.find((r) => r.role_id === user.role_id)?.name || "N/A"}
-                  </TableCell>
-                  <TableCell className="p-4">
-                    <Badge
-                      variant={user.status ? "default" : "secondary"}
-                      className={user.status ? "bg-green-100 text-green-800" : ""}
-                    >
-                      {user.status ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="p-4">{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-2 hover:bg-gray-100 rounded"
-                        onClick={() => fetchUserDetails(user.user_id, user)}
-                      >
-                        <Icon icon="mdi:eye" size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-2 hover:bg-gray-100 rounded"
-                        onClick={() => handleEditUser(user)}
-                      >
-                        <Icon icon="mdi:pencil" size={16} />
-                      </Button>
-                      <Switch checked={user.status} onCheckedChange={() => toggleUserStatus(user._id, user.status)} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
+  {users.map((user) => {
+    const isEditing = editingUserId === user._id;
+    return (
+      <TableRow key={user._id} className="hover:bg-gray-50 transition-colors">
+        <TableCell className="p-4 font-medium">
+          {isEditing ? (
+            <Input
+              value={editingUsername}
+              onChange={(e) => setEditingUsername(e.target.value)}
+              className="w-full"
+            />
+          ) : (
+            user.username
+          )}
+        </TableCell>
+
+        <TableCell className="p-4">{user.email}</TableCell>
+        <TableCell className="p-4">
+          {roles.find((r) => r.role_id === user.role_id)?.name || "N/A"}
+        </TableCell>
+        <TableCell className="p-4">
+          <Badge
+            variant={user.status ? "default" : "secondary"}
+            className={user.status ? "bg-green-100 text-green-800" : ""}
+          >
+            {user.status ? "Active" : "Inactive"}
+          </Badge>
+        </TableCell>
+        <TableCell className="p-4">{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+       <TableCell className="text-right">
+  <div className="flex items-center justify-end gap-2">
+    {isEditing ? (
+      <>
+        <button
+          onClick={() => saveEditedUser(user._id)}
+          className="p-2 hover:bg-green-100 text-green-600 rounded"
+          title="Save"
+        >
+          ✓
+        </button>
+        <button
+          onClick={cancelEdit}
+          className="p-2 hover:bg-red-100 text-red-600 rounded"
+          title="Cancel"
+        >
+          ✕
+        </button>
+      </>
+    ) : (
+      <>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="p-2 hover:bg-gray-100 rounded"
+          onClick={() => fetchUserDetails(user.user_id, user)}
+        >
+          <Icon icon="mdi:eye" size={16} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="p-2 hover:bg-gray-100 rounded"
+          onClick={() => startEditing(user)}
+        >
+          <Icon icon="mdi:pencil" size={16} />
+        </Button>
+        <Switch
+          checked={user.status}
+          onCheckedChange={() => toggleUserStatus(user._id, user.status)}
+        />
+      </>
+    )}
+  </div>
+</TableCell>
+
+
+      </TableRow>
+    );
+  })}
+</TableBody>
+
           </Table>
         </CardContent>
       </Card>

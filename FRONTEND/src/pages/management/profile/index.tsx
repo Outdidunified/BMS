@@ -24,7 +24,7 @@ function UserProfile() {
   const [editMode, setEditMode] = useState<boolean>(false);
   const [formData, setFormData] = useState({ username: "", password: "" });
 
-  const API_BASE = "http://192.168.0.40:8070";
+  const API_BASE =import.meta.env.VITE_APP_API_BASE_URL;
 
   useEffect(() => {
     fetchProfile();
