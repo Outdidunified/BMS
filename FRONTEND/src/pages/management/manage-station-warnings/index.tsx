@@ -385,25 +385,24 @@ console.log("User Stations:", userStations);
 
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="cellVoltageLow" className="text-right">Cell Voltage Low</Label>
-          <Input
-            id="cellVoltageLow"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="e.g., 3.0"
-            value={warningData.cellVoltage.low}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^\d*\.?\d*$/.test(value)) {
-                handleWarningChange("cellVoltage", "low", value);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
-            }}
-            className="col-span-3"
-            required
-          />
+           <Input
+    id="cellVoltageLow"
+    type="number"
+    step="0.1"
+    placeholder="e.g., 3.0"
+    value={warningData.cellVoltage.low}
+    onChange={(e) => {
+      const value = e.target.value;
+      if (/^-?\d*\.?\d*$/.test(value)) { // allow negative
+        handleWarningChange("cellVoltage", "low", value);
+      }
+    }}
+    onKeyDown={(e) => {
+      if (["e", "E", "+"].includes(e.key)) e.preventDefault(); // keep "-" allowed
+    }}
+    className="col-span-3"
+    required
+  />
         </div>
 
         <div className="grid grid-cols-4 items-center gap-4">
@@ -454,25 +453,24 @@ console.log("User Stations:", userStations);
 
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="temperatureLow" className="text-right">Temperature Low</Label>
-          <Input
-            id="temperatureLow"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="e.g., 10"
-            value={warningData.temperature.low}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^\d*\.?\d*$/.test(value)) {
-                handleWarningChange("temperature", "low", value);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
-            }}
-            className="col-span-3"
-            required
-          />
+            <Input
+    id="temperatureLow"
+    type="number"
+    step="0.1"
+    placeholder="e.g., 10"
+    value={warningData.temperature.low}
+    onChange={(e) => {
+      const value = e.target.value;
+      if (/^-?\d*\.?\d*$/.test(value)) { // allow negative
+        handleWarningChange("temperature", "low", value);
+      }
+    }}
+    onKeyDown={(e) => {
+      if (["e", "E", "+"].includes(e.key)) e.preventDefault();
+    }}
+    className="col-span-3"
+    required
+  />
         </div>
 
         <div className="grid grid-cols-4 items-center gap-4">
@@ -524,24 +522,23 @@ console.log("User Stations:", userStations);
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="currentLow" className="text-right">Current Low</Label>
           <Input
-            id="currentLow"
-            type="number"
-            step="0.1"
-            min="0"
-            placeholder="e.g., 10"
-            value={warningData.current.low}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^\d*\.?\d*$/.test(value)) {
-                handleWarningChange("current", "low", value);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
-            }}
-            className="col-span-3"
-            required
-          />
+    id="currentLow"
+    type="number"
+    step="0.1"
+    placeholder="e.g., 10"
+    value={warningData.current.low}
+    onChange={(e) => {
+      const value = e.target.value;
+      if (/^-?\d*\.?\d*$/.test(value)) { // allow negative
+        handleWarningChange("current", "low", value);
+      }
+    }}
+    onKeyDown={(e) => {
+      if (["e", "E", "+"].includes(e.key)) e.preventDefault();
+    }}
+    className="col-span-3"
+    required
+  />
         </div>
 
         <div className="grid grid-cols-4 items-center gap-4">
