@@ -10,8 +10,21 @@ import logger from '../utils/logger.js';
 
 export async function getChartData(req, res) {
     try {
+        const db = getDb();
+        const stationModel = new Station(db);
+        const deviceModel = Device; // Device has a collection getter
+        const telemetryModel = Telemetry; // Telemetry has a collection getter
+        const warningModel = new Warning(db);
+
         const user = req.user;
         const isSuperAdmin = user.role === 'superadmin';
+
+        const cacheKeyCharts = `dashboard_charts_${user.user_id}`;
+        const cache = req.app?.locals?.cache || telemetryModel.cache;
+        const cachedCharts = await cache?.get(cacheKeyCharts);
+        if (cachedCharts) {
+            return res.ok(cachedCharts, 'Chart data fetched successfully.');
+        }
 
         let stationFilter = {};
         if (!isSuperAdmin) {
@@ -28,43 +41,17 @@ export async function getChartData(req, res) {
         }
 
         // Get stations
-        const stations = await Station.collection.find(stationFilter).toArray();
+        const stations = await stationModel.collection.find(stationFilter).toArray();
         const stationIds = stations.map(s => s._id);
 
         // Device filter
         const deviceFilter = isSuperAdmin ? {} : { station_id: { $in: stationIds } };
 
         // Total devices
-        const totalDevices = await Device.collection.countDocuments(deviceFilter);
+        const totalDevices = await deviceModel.collection.countDocuments(deviceFilter);
 
-        // Online devices
-        const oneHourAgo = new Date(Date.now() - 3600000);
-        const onlineDevicesAgg = await Telemetry.collection.aggregate([
-            {
-                $match: {
-                    timestamp: { $gte: oneHourAgo },
-                    $or: [
-                        { 'device.DI': { $exists: true } },
-                        { 'deviceFull.deviceId': { $exists: true } }
-                    ]
-                }
-            },
-            {
-                $lookup: {
-                    from: 'devices',
-                    let: { di: { $ifNull: ['$device.DI', '$deviceFull.deviceId'] } },
-                    pipeline: [
-                        { $match: { $expr: { $or: [{ $eq: ['$deviceId', '$$di'] }, { $eq: ['$DI', '$$di'] }] } } },
-                        { $match: deviceFilter },
-                        { $project: { _id: 1 } }
-                    ],
-                    as: 'device'
-                }
-            },
-            { $match: { 'device.0': { $exists: true } } },
-            { $group: { _id: null, count: { $sum: 1 } } }
-        ]).toArray();
-        const onlineDevices = onlineDevicesAgg[0]?.count || 0;
+        // Online devices: use device.connected flag
+        const onlineDevices = await deviceModel.collection.countDocuments({ ...deviceFilter, connected: true });
         const offlineDevices = totalDevices - onlineDevices;
 
         // Device Status Pie Chart
@@ -77,7 +64,7 @@ export async function getChartData(req, res) {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
         // Battery Voltage Trend
-        const voltageTrendAgg = await Telemetry.collection.aggregate([
+        const voltageTrendAgg = await telemetryModel.collection.aggregate([
             { $match: { timestamp: { $gte: thirtyDaysAgo } } },
             {
                 $lookup: {
@@ -108,7 +95,7 @@ export async function getChartData(req, res) {
         };
 
         // Temperature Trend
-        const tempTrendAgg = await Telemetry.collection.aggregate([
+        const tempTrendAgg = await telemetryModel.collection.aggregate([
             { $match: { timestamp: { $gte: thirtyDaysAgo } } },
             {
                 $lookup: {
@@ -139,7 +126,7 @@ export async function getChartData(req, res) {
         };
 
         // Current Trend
-        const currentTrendAgg = await Telemetry.collection.aggregate([
+        const currentTrendAgg = await telemetryModel.collection.aggregate([
             { $match: { timestamp: { $gte: thirtyDaysAgo } } },
             {
                 $lookup: {
@@ -170,7 +157,7 @@ export async function getChartData(req, res) {
         };
 
         // Warnings Bar Chart
-        const warningsByTypeAgg = await Warning.collection.aggregate([
+        const warningsByTypeAgg = await warningModel.collection.aggregate([
             {
                 $lookup: {
                     from: 'devices',
@@ -193,13 +180,18 @@ export async function getChartData(req, res) {
         };
 
         logger.loggerInfo(`Chart data for user ${user.user_id}`);
-        return res.ok({
+
+        const resultPayload = {
             deviceStatusPie,
             batteryVoltageTrend,
             temperatureTrend,
             currentTrend,
             warningsBar
-        }, 'Chart data fetched successfully.');
+        };
+
+        await cache?.set(cacheKeyCharts, resultPayload, { ttl: 300 });
+
+        return res.ok(resultPayload, 'Chart data fetched successfully.');
     } catch (err) {
         logger.loggerError(`getChartData error: ${err.message || err}`);
         return res.fail('Unable to fetch chart data. Please try again later.', 500);
@@ -208,6 +200,21 @@ export async function getChartData(req, res) {
 
 export async function dashboardSummary(req, res) {
     try {
+        const db = getDb();
+        const stationModel = new Station(db);
+        const deviceModel = Device; // Device has a collection getter
+        const userModel = new User(db);
+        const telemetryModel = Telemetry; // Telemetry has a collection getter
+        const warningModel = new Warning(db);
+
+        const cache = req.app?.locals?.cache || telemetryModel.cache;
+        const cacheKey = `dashboard_summary_${req.user?.user_id ?? 'anonymous'}`;
+
+        const cachedSummary = await cache?.get(cacheKey);
+        if (cachedSummary) {
+            return res.ok(cachedSummary, 'Dashboard summary fetched successfully.');
+        }
+
         const user = req.user;
         const isSuperAdmin = user.role === 'superadmin'; // Assuming role name is 'superadmin'
 
@@ -215,7 +222,7 @@ export async function dashboardSummary(req, res) {
         if (!isSuperAdmin) {
             // For station masters, filter by assigned stations
             if (!user.stations || user.stations.length === 0) {
-                return res.ok({
+                const emptyPayload = {
                     totalDevices: 0,
                     onlineDevices: 0,
                     offlineDevices: 0,
@@ -228,49 +235,27 @@ export async function dashboardSummary(req, res) {
                     batteryHealth: { avgPackVoltage: 0, avgTemperature: 0, avgChargingCurrent: 0 },
                     usersByRole: {},
                     warningsByType: {}
-                }, 'Dashboard summary fetched successfully.');
+                };
+                if (cache) {
+                    await cache.set(cacheKey, emptyPayload, { ttl: 300 });
+                }
+                return res.ok(emptyPayload, 'Dashboard summary fetched successfully.');
             }
             stationFilter = { _id: { $in: user.stations.map(id => typeof id === 'string' ? new ObjectId(id) : id) } };
         }
 
         // Get stations
-        const stations = await Station.collection.find(stationFilter).toArray();
+        const stations = await stationModel.collection.find(stationFilter).toArray();
         const stationIds = stations.map(s => s._id);
 
         // Device filter
         const deviceFilter = isSuperAdmin ? {} : { station_id: { $in: stationIds } };
 
         // Total devices
-        const totalDevices = await Device.collection.countDocuments(deviceFilter);
+        const totalDevices = await deviceModel.collection.countDocuments(deviceFilter);
 
-        // Online devices: devices with telemetry in last 1 hour
-        const oneHourAgo = new Date(Date.now() - 3600000);
-        const onlineDevicesAgg = await Telemetry.collection.aggregate([
-            {
-                $match: {
-                    timestamp: { $gte: oneHourAgo },
-                    $or: [
-                        { 'device.DI': { $exists: true } },
-                        { 'deviceFull.deviceId': { $exists: true } }
-                    ]
-                }
-            },
-            {
-                $lookup: {
-                    from: 'devices',
-                    let: { di: { $ifNull: ['$device.DI', '$deviceFull.deviceId'] } },
-                    pipeline: [
-                        { $match: { $expr: { $or: [{ $eq: ['$deviceId', '$$di'] }, { $eq: ['$DI', '$$di'] }] } } },
-                        { $match: deviceFilter },
-                        { $project: { _id: 1 } }
-                    ],
-                    as: 'device'
-                }
-            },
-            { $match: { 'device.0': { $exists: true } } },
-            { $group: { _id: null, count: { $sum: 1 } } }
-        ]).toArray();
-        const onlineDevices = onlineDevicesAgg[0]?.count || 0;
+        // Online devices: use device.connected flag
+        const onlineDevices = await deviceModel.collection.countDocuments({ ...deviceFilter, connected: true });
         const offlineDevices = totalDevices - onlineDevices;
 
         // Stations
@@ -280,11 +265,11 @@ export async function dashboardSummary(req, res) {
 
         // Users
         const userFilter = isSuperAdmin ? {} : { stations: { $in: stationIds } };
-        const totalUsers = await User.collection.countDocuments(userFilter);
-        const activeUsers = await User.collection.countDocuments({ ...userFilter, status: true });
+        const totalUsers = await userModel.collection.countDocuments(userFilter);
+        const activeUsers = await userModel.collection.countDocuments({ ...userFilter, status: true });
 
         // Users by role
-        const usersByRoleAgg = await User.collection.aggregate([
+        const usersByRoleAgg = await userModel.collection.aggregate([
             { $match: userFilter },
             {
                 $lookup: {
@@ -301,59 +286,41 @@ export async function dashboardSummary(req, res) {
         usersByRoleAgg.forEach(r => usersByRole[r._id] = r.count);
 
         // Total warnings
-        const totalWarningsAgg = await Warning.collection.aggregate([
-            {
-                $lookup: {
-                    from: 'devices',
-                    let: { deviceId: '$deviceId' },
-                    pipeline: [
-                        { $match: { $expr: { $or: [{ $eq: ['$deviceId', '$$deviceId'] }, { $eq: ['$DI', '$$deviceId'] }] } } },
-                        { $match: deviceFilter }
-                    ],
-                    as: 'device'
-                }
-            },
-            { $match: { 'device.0': { $exists: true } } },
+        const warningMatchStage = deviceFilter && Object.keys(deviceFilter).length
+            ? { station_id: { $in: stationIds } }
+            : {};
+
+        const totalWarningsAgg = await warningModel.collection.aggregate([
+            { $match: warningMatchStage },
             { $count: 'count' }
         ]).toArray();
         const totalWarnings = totalWarningsAgg[0]?.count || 0;
 
         // Warnings by type (simplified)
-        const warningsByTypeAgg = await Warning.collection.aggregate([
-            {
-                $lookup: {
-                    from: 'devices',
-                    let: { deviceId: '$deviceId' },
-                    pipeline: [
-                        { $match: { $expr: { $or: [{ $eq: ['$deviceId', '$$deviceId'] }, { $eq: ['$DI', '$$deviceId'] }] } } },
-                        { $match: deviceFilter }
-                    ],
-                    as: 'device'
-                }
-            },
-            { $match: { 'device.0': { $exists: true } } },
+        const warningsByTypeAgg = await warningModel.collection.aggregate([
+            { $match: warningMatchStage },
             { $project: { thresholds: { $objectToArray: '$thresholds' } } },
             { $unwind: '$thresholds' },
             { $group: { _id: '$thresholds.k', count: { $sum: 1 } } }
         ]).toArray();
         const warningsByType = {};
-        warningsByTypeAgg.forEach(w => warningsByType[w._id] = w.count);
+        warningsByTypeAgg.forEach(w => {
+            if (w._id) {
+                warningsByType[w._id] = w.count;
+            }
+        });
 
+        const oneHourAgo = new Date(Date.now() - 3600000);
         // Battery health: avg from recent telemetry
-        const batteryHealthAgg = await Telemetry.collection.aggregate([
-            { $match: { timestamp: { $gte: oneHourAgo } } },
-            {
-                $lookup: {
-                    from: 'devices',
-                    let: { di: { $ifNull: ['$device.DI', '$deviceFull.deviceId'] } },
-                    pipeline: [
-                        { $match: { $expr: { $or: [{ $eq: ['$deviceId', '$$di'] }, { $eq: ['$DI', '$$di'] }] } } },
-                        { $match: deviceFilter }
-                    ],
-                    as: 'device'
-                }
-            },
-            { $match: { 'device.0': { $exists: true } } },
+        const batteryMatchStage = {
+            timestamp: { $gte: oneHourAgo },
+            ...(deviceFilter && Object.keys(deviceFilter).length
+                ? { 'device.station_id': { $in: stationIds } }
+                : {})
+        };
+
+        const batteryHealthAgg = await telemetryModel.collection.aggregate([
+            { $match: batteryMatchStage },
             {
                 $group: {
                     _id: null,
@@ -366,7 +333,7 @@ export async function dashboardSummary(req, res) {
         const batteryHealth = batteryHealthAgg[0] || { avgPackVoltage: 0, avgTemperature: 0, avgChargingCurrent: 0 };
 
         logger.loggerInfo(`Dashboard summary for user ${user.user_id}`);
-        return res.ok({
+        const resultPayload = {
             totalDevices,
             onlineDevices,
             offlineDevices,
@@ -379,7 +346,11 @@ export async function dashboardSummary(req, res) {
             batteryHealth,
             usersByRole,
             warningsByType
-        }, 'Dashboard summary fetched successfully.');
+        };
+
+        await cache?.set(`dashboard_summary_${user.user_id}`, resultPayload, { ttl: 300 });
+
+        return res.ok(resultPayload, 'Dashboard summary fetched successfully.');
     } catch (err) {
         logger.loggerError(`dashboardSummary error: ${err.message || err}`);
         return res.fail('Unable to fetch dashboard summary. Please try again later.', 500);

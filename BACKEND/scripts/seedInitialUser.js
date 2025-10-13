@@ -14,12 +14,24 @@ async function seedInitialData() {
         const roles = [
             {
                 name: 'superadmin',
-                permissions: ['manage_users', 'view_devices', 'manage_devices', 'view_telemetry', 'view_analytics', 'manage_notifications'],
+                permissions: {
+                    manage_users: true,
+                    view_devices: true,
+                    manage_devices: true,
+                    view_telemetry: true,
+                    view_analytics: true,
+                    manage_notifications: true,
+                    view_dashboard: true
+                },
                 status: true
             },
             {
                 name: 'stationmaster',
-                permissions: ['view_devices', 'view_telemetry'],
+                permissions: {
+                    view_devices: true,
+                    view_telemetry: true,
+                    view_dashboard: true
+                },
                 status: true
             }
         ];
@@ -30,11 +42,17 @@ async function seedInitialData() {
                 await roleModel.create(roleData);
                 logger.loggerInfo(`Role created: ${roleData.name}`);
             } else {
-                // Update existing role to add role_id if missing
+                // Update existing role to add role_id if missing or update permissions
+                const updates = {};
                 if (!existingRole.role_id) {
-                    const role_id = await roleModel.getNextRoleId();
-                    await roleModel.update(existingRole._id.toString(), { role_id });
-                    logger.loggerInfo(`Role updated with role_id: ${roleData.name}`);
+                    updates.role_id = await roleModel.getNextRoleId();
+                }
+                if (JSON.stringify(existingRole.permissions) !== JSON.stringify(roleData.permissions)) {
+                    updates.permissions = roleData.permissions;
+                }
+                if (Object.keys(updates).length > 0) {
+                    await roleModel.update(existingRole._id.toString(), updates);
+                    logger.loggerInfo(`Role updated: ${roleData.name}`);
                 } else {
                     logger.loggerInfo(`Role already exists: ${roleData.name}`);
                 }

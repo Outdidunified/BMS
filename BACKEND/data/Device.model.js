@@ -4,6 +4,9 @@ import { collections } from '../config/db.js';
 const col = () => collections().devices;
 
 const Device = {
+    get collection() {
+        return col();
+    },
     async create(doc) {
         const { insertedId } = await col().insertOne(doc);
         return { ...doc, _id: insertedId };
