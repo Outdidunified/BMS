@@ -29,22 +29,40 @@ export async function ingestData(req, res) {
         let device;
         let wasInserted = false;
         try {
+            const fieldsToSet = {
+                deviceId,
+                DI: deviceId,
+                status: true,
+                updatedAt: now,
+            };
+
+            if (batteryId) {
+                fieldsToSet.batteryId = batteryId;
+            }
+
+            if (macId) {
+                fieldsToSet.macId = macId;
+            }
+
+            const updateOperators = {
+                $set: fieldsToSet,
+                $setOnInsert: {
+                    createdAt: now,
+                    connected: false,
+                },
+            };
+
+            if (!macId) {
+                updateOperators.$unset = { ...(updateOperators.$unset || {}), macId: "" };
+            }
+
+            if (!batteryId) {
+                updateOperators.$unset = { ...(updateOperators.$unset || {}), batteryId: "" };
+            }
+
             const upsertResult = await Device.findOneAndUpdate(
                 lookupQuery,
-                {
-                    $set: {
-                        deviceId,
-                        DI: deviceId,
-                        batteryId,
-                        macId,
-                        status: true,
-                        updatedAt: now,
-                    },
-                    $setOnInsert: {
-                        createdAt: now,
-                        connected: false,
-                    },
-                },
+                updateOperators,
                 { upsert: true, new: true, returnDocument: 'after', rawResult: true },
             );
 
@@ -73,9 +91,26 @@ export async function ingestData(req, res) {
         }
 
         const timestamp = frame.time ? new Date(frame.time) : new Date();
-        // Build telemetry from full-form if provided; otherwise map legacy params
-        const legacyParams = frame.params || {};
+
+        const legacyParamsOriginal = frame.params || {};
+        const legacyParams = { ...legacyParamsOriginal };
         const sourceTele = frame.telemetry || {};
+
+        const centiTemps = Array.isArray(sourceTele.temperatures)
+            ? sourceTele.temperatures.some(t => typeof t === 'number' && Math.abs(t) >= 200)
+            : Object.keys(legacyParams).some((key) => {
+                if (!key.startsWith('T')) return false;
+                const numericPart = Number(key.slice(1));
+                if (!Number.isFinite(numericPart)) return false;
+                const tempValue = legacyParams[key];
+                return typeof tempValue === 'number' && Math.abs(tempValue) >= 200;
+            });
+
+        const stripCenti = (value) => {
+            if (typeof value !== 'number') return null;
+            if (!centiTemps) return value;
+            return Number((value / 100).toFixed(2));
+        };
 
         const voltages = Array.isArray(sourceTele.voltages)
             ? sourceTele.voltages.map(v => (typeof v === 'number' ? v : null))
@@ -83,28 +118,65 @@ export async function ingestData(req, res) {
                 const v = legacyParams[`v${i + 1}`];
                 return typeof v === 'number' ? v : null;
             });
+
         const temperatures = Array.isArray(sourceTele.temperatures)
-            ? sourceTele.temperatures.map(t => (typeof t === 'number' ? t : null))
+            ? sourceTele.temperatures.map(stripCenti)
             : Array.from({ length: 25 }, (_, i) => {
-                const t = legacyParams[`T${i + 1}`];
-                return typeof t === 'number' ? t : null;
+                const tKey = `T${i + 1}`;
+                const t = legacyParams[tKey];
+                const normalized = stripCenti(t);
+                if (normalized != null) legacyParams[tKey] = normalized;
+                return normalized;
             });
+
+        const currentsSource = sourceTele?.currents || {};
+        const currents = {
+            charging: typeof currentsSource.charging === 'number' ? currentsSource.charging : (typeof legacyParams.cc === 'number' ? legacyParams.cc : null),
+            discharging: typeof currentsSource.discharging === 'number' ? currentsSource.discharging : (typeof legacyParams.dc === 'number' ? legacyParams.dc : null),
+            load: typeof currentsSource.load === 'number' ? currentsSource.load : (typeof legacyParams.lc === 'number' ? legacyParams.lc : null),
+        };
+
+        const telemetryMetadata = {
+            firmwareVersion: frame.firmwareVersion || frame.deviceFull?.firmwareVersion || null,
+            deviceStatus: frame.deviceStatus || null,
+            batteryState: frame.batteryState || null,
+            frameSequence: frame.frameSequence ?? null,
+            uptimeSeconds: frame.uptimeSeconds ?? null,
+            health: {
+                isCharging: frame.isCharging ?? frame.health?.isCharging ?? null,
+                faultCode: frame.faultCode ?? frame.health?.faultCode ?? null,
+                soc: frame.soc ?? frame.health?.soc ?? null,
+                soh: frame.soh ?? frame.health?.soh ?? null,
+            },
+            timestampSource: frame.sourceTime || frame.deviceTime || null,
+            apiKey: req.apiKey || null,
+        };
+
         const telemetryV2 = {
             voltages,
             packVoltage: typeof sourceTele.packVoltage === 'number' ? sourceTele.packVoltage : (typeof legacyParams.pv === 'number' ? legacyParams.pv : null),
-            currents: {
-                charging: typeof sourceTele?.currents?.charging === 'number' ? sourceTele.currents.charging : (typeof legacyParams.cc === 'number' ? legacyParams.cc : null),
-                discharging: typeof sourceTele?.currents?.discharging === 'number' ? sourceTele.currents.discharging : (typeof legacyParams.dc === 'number' ? legacyParams.dc : null),
-                load: typeof sourceTele?.currents?.load === 'number' ? sourceTele.currents.load : (typeof legacyParams.lc === 'number' ? legacyParams.lc : null),
-            },
+            currents,
             temperatures,
+            metadata: telemetryMetadata,
         };
 
         const doc = {
             timestamp,
-            // Store only full-form identifiers and telemetry
-            deviceFull: { deviceId, batteryId, macId },
+            deviceFull: {
+                deviceId,
+                batteryId,
+                macId,
+                firmwareVersion: telemetryMetadata.firmwareVersion,
+                deviceStatus: telemetryMetadata.deviceStatus,
+                batteryState: telemetryMetadata.batteryState,
+            },
             telemetry: telemetryV2,
+            params: legacyParams,
+            frameSequence: telemetryMetadata.frameSequence,
+            uptimeSeconds: telemetryMetadata.uptimeSeconds,
+            health: telemetryMetadata.health,
+            timestampSource: telemetryMetadata.timestampSource,
+            apiKey: telemetryMetadata.apiKey,
         };
 
         await Telemetry.collection.insertOne(doc);

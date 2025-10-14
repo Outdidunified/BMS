@@ -20,6 +20,7 @@ const Device = {
     async findOneAndUpdate(filter, update, options = {}) {
         const opts = {
             upsert: !!options.upsert,
+            includeResultMetadata: !!options.rawResult,
         };
         // Support both MongoDB driver v3 (returnOriginal) and v4+ (returnDocument)
         if (Object.prototype.hasOwnProperty.call(options, 'new')) {
@@ -34,9 +35,10 @@ const Device = {
             updateDoc,
             opts
         );
-        if (!result) return null;
-        if (Object.prototype.hasOwnProperty.call(result, 'value')) return result.value;
-        return result; // fallback
+        if (!options.rawResult) {
+            return result;
+        }
+        return result;
     },
     async deleteOne(filter) {
         return await col().deleteOne(filter);

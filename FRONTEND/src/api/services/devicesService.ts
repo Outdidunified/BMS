@@ -19,15 +19,36 @@ export interface DeviceDoc extends DeviceDto {
 export enum DevicesApi {
   Create = "/devices/create",
   List = "/devices/fetch-all",
+  ListByStation = "/devices/by-station",
   ById = "/devices/", // + :di
   Update = "/devices/update/", // + :di
   Status = "/devices/", // + :di + "/status"
   Delete = "/devices/delete/", // + :di
 }
 
+type ListDevicesParams = {
+  includeInactive?: boolean;
+};
+
+type ListDevicesByStationParams = {
+  includeAssignments?: boolean;
+};
+
 const createDevice = (data: DeviceDto) => apiClient.post<DeviceDoc>({ url: DevicesApi.Create, data });
-const listDevices = (includeInactive = false) =>
-  apiClient.get<DeviceDoc[]>({ url: DevicesApi.List, params: { includeInactive } });
+const listDevices = (includeInactive = false) => {
+  const params: ListDevicesParams = {};
+  if (includeInactive) {
+    params.includeInactive = true;
+  }
+  return apiClient.get<DeviceDoc[]>({ url: DevicesApi.List, params });
+};
+const listDevicesByStation = (includeAssignments = false) => {
+  const params: ListDevicesByStationParams = {};
+  if (includeAssignments) {
+    params.includeAssignments = true;
+  }
+  return apiClient.get<DeviceDoc[]>({ url: DevicesApi.ListByStation, params });
+};
 const getDevice = (di: string) => apiClient.get<DeviceDoc>({ url: `${DevicesApi.ById}${di}` });
 const updateDevice = (di: string, data: Partial<DeviceDto>) =>
   apiClient.put<DeviceDoc>({ url: `${DevicesApi.Update}${di}`, data });
@@ -38,6 +59,7 @@ const deleteDevice = (di: string) => apiClient.delete<{ deleted: boolean }>({ ur
 export default {
   createDevice,
   listDevices,
+  listDevicesByStation,
   getDevice,
   updateDevice,
   updateDeviceStatus,

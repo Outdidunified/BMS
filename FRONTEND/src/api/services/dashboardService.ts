@@ -19,41 +19,40 @@ export interface DashboardSummary {
   warningsByType: Record<string, number>;
 }
 
+export interface DeviceStatusChart {
+  labels: string[];
+  data: number[];
+}
+
+export interface TrendChart {
+  labels: string[];
+  datasets: Array<{
+    label: string;
+    data: number[];
+  }>;
+}
+
+export interface WarningsSummaryChart {
+  labels: string[];
+  data: number[];
+}
+
 export interface ChartData {
-  deviceStatusPie: {
-    labels: string[];
-    data: number[];
-  };
-  batteryVoltageTrend: {
-    labels: string[];
-    datasets: Array<{
-      label: string;
-      data: number[];
-    }>;
-  };
-  temperatureTrend: {
-    labels: string[];
-    datasets: Array<{
-      label: string;
-      data: number[];
-    }>;
-  };
-  currentTrend: {
-    labels: string[];
-    datasets: Array<{
-      label: string;
-      data: number[];
-    }>;
-  };
-  warningsBar: {
-    labels: string[];
-    data: number[];
-  };
+  deviceStatus: DeviceStatusChart;
+  batteryVoltageTrend: TrendChart;
+  temperatureTrend: TrendChart;
+  currentTrend: TrendChart;
+  warningsSummary: WarningsSummaryChart;
 }
 
 export enum DashboardApi {
   Summary = "/dashboard/summary",
   Charts = "/dashboard/charts",
+  DeviceStatus = "/dashboard/device-status",
+  BatteryVoltage = "/dashboard/battery-voltage",
+  TemperatureTrend = "/dashboard/temperature-trend",
+  CurrentTrend = "/dashboard/current-trend",
+  WarningsSummary = "/dashboard/warnings-summary",
 }
 
 const summaryCache: { data: DashboardSummary | null; timestamp: number } = {
@@ -61,38 +60,115 @@ const summaryCache: { data: DashboardSummary | null; timestamp: number } = {
   timestamp: 0,
 };
 
-const chartsCache: { data: ChartData | null; timestamp: number } = {
-  data: null,
-  timestamp: 0,
+const chartCaches: Record<keyof typeof DashboardApi, { data: unknown; timestamp: number }> = {
+  Summary: summaryCache,
+  Charts: { data: null, timestamp: 0 },
+  DeviceStatus: { data: null, timestamp: 0 },
+  BatteryVoltage: { data: null, timestamp: 0 },
+  TemperatureTrend: { data: null, timestamp: 0 },
+  CurrentTrend: { data: null, timestamp: 0 },
+  WarningsSummary: { data: null, timestamp: 0 },
 };
 
 const CACHE_TTL_MS = 60_000; // 1 minute client-side cache window for responsiveness
 
 const getSummary = async () => {
   const now = Date.now();
-  if (summaryCache.data && now - summaryCache.timestamp < CACHE_TTL_MS) {
-    return summaryCache.data;
+  const cacheEntry = chartCaches.Summary as { data: DashboardSummary | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
   }
 
   const data = await apiClient.get<DashboardSummary>({ url: DashboardApi.Summary });
-  summaryCache.data = data;
-  summaryCache.timestamp = now;
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
   return data;
 };
 
 const getCharts = async () => {
   const now = Date.now();
-  if (chartsCache.data && now - chartsCache.timestamp < CACHE_TTL_MS) {
-    return chartsCache.data;
+  const cacheEntry = chartCaches.Charts as { data: ChartData | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
   }
 
   const data = await apiClient.get<ChartData>({ url: DashboardApi.Charts });
-  chartsCache.data = data;
-  chartsCache.timestamp = now;
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
+  return data;
+};
+
+const getDeviceStatus = async () => {
+  const now = Date.now();
+  const cacheEntry = chartCaches.DeviceStatus as { data: DeviceStatusChart | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
+  }
+
+  const data = await apiClient.get<DeviceStatusChart>({ url: DashboardApi.DeviceStatus });
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
+  return data;
+};
+
+const getBatteryVoltageTrend = async () => {
+  const now = Date.now();
+  const cacheEntry = chartCaches.BatteryVoltage as { data: TrendChart | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
+  }
+
+  const data = await apiClient.get<TrendChart>({ url: DashboardApi.BatteryVoltage });
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
+  return data;
+};
+
+const getTemperatureTrend = async () => {
+  const now = Date.now();
+  const cacheEntry = chartCaches.TemperatureTrend as { data: TrendChart | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
+  }
+
+  const data = await apiClient.get<TrendChart>({ url: DashboardApi.TemperatureTrend });
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
+  return data;
+};
+
+const getCurrentTrend = async () => {
+  const now = Date.now();
+  const cacheEntry = chartCaches.CurrentTrend as { data: TrendChart | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
+  }
+
+  const data = await apiClient.get<TrendChart>({ url: DashboardApi.CurrentTrend });
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
+  return data;
+};
+
+const getWarningsSummary = async () => {
+  const now = Date.now();
+  const cacheEntry = chartCaches.WarningsSummary as { data: WarningsSummaryChart | null; timestamp: number };
+  if (cacheEntry.data && now - cacheEntry.timestamp < CACHE_TTL_MS) {
+    return cacheEntry.data;
+  }
+
+  const data = await apiClient.get<WarningsSummaryChart>({ url: DashboardApi.WarningsSummary });
+  cacheEntry.data = data;
+  cacheEntry.timestamp = now;
   return data;
 };
 
 export default {
   getSummary,
   getCharts,
+  getDeviceStatus,
+  getBatteryVoltageTrend,
+  getTemperatureTrend,
+  getCurrentTrend,
+  getWarningsSummary,
 };

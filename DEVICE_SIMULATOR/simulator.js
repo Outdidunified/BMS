@@ -192,19 +192,39 @@ class DeviceSim {
         for (let i = 1; i <= NUM_CELLS; i++) {
             params[`v${i}`] = Number(this.cellVoltages[i - 1].toFixed(2));
         }
-        // Pack voltage (integer, as per existing backend mapping rules)
-        params.pv = Number(this.cellVoltages.reduce((sum, v) => sum + v, 0).toFixed(0));
+        params.pv = Number(this.cellVoltages.reduce((sum, v) => sum + v, 0).toFixed(2));
 
-        // Currents
         params.cc = Number(cc.toFixed(2));
         params.dc = Number(dc.toFixed(2));
         params.lc = Number(lc.toFixed(2));
 
-        // Temperatures T1..T25 around baseTemp with small spread (keep at 25 sensors for compatibility)
         const tempSensors = 25;
+        const temperatureArray = [];
         for (let i = 1; i <= tempSensors; i++) {
-            params[`T${i}`] = Number((this.baseTemp + randBetween(-0.4, 0.6)).toFixed(1));
+            const value = Number((this.baseTemp + randBetween(-0.4, 0.6)).toFixed(2));
+            params[`T${i}`] = value;
+            temperatureArray.push(value);
         }
+
+        const health = {
+            isCharging: this.mode === 'charge',
+            faultCode: null,
+            soc: Number((this.soc * 100).toFixed(2)),
+            soh: Number(randBetween(92, 98).toFixed(2)),
+        };
+
+        const currents = {
+            charging: params.cc,
+            discharging: params.dc,
+            load: params.lc,
+        };
+
+        const telemetry = {
+            voltages: [...this.cellVoltages.map(v => Number(v.toFixed(3)))],
+            temperatures: temperatureArray,
+            packVoltage: params.pv,
+            currents,
+        };
 
         const frame = {
             DI: this.ident.DI,
@@ -212,6 +232,17 @@ class DeviceSim {
             MI: this.ident.MI,
             time: new Date().toISOString(),
             params,
+            telemetry,
+            frameSequence: this.frameSequence = (this.frameSequence || 0) + 1,
+            uptimeSeconds: Math.floor(process.uptime()),
+            firmwareVersion: process.env.FIRMWARE_VERSION || '1.0.0-sim',
+            deviceStatus: this.mode,
+            batteryState: health.isCharging ? 'charging' : (this.mode === 'discharge' ? 'discharging' : 'idle'),
+            health,
+            sourceTime: new Date().toISOString(),
+            isCharging: health.isCharging,
+            soc: health.soc,
+            soh: health.soh,
         };
         return frame;
     }
