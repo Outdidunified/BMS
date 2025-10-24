@@ -143,10 +143,15 @@ export default function DeviceHistoryDetail() {
 
     try {
       const token = sessionStorage.getItem("authToken");
-     const res = await fetch(
-  `http://192.168.0.62:8070/telemetry/battery/logs?deviceId=${deviceId}&bank=${selectedBank}&from=${logDateRange.from}&to=${logDateRange.to}`,
-  { headers: { Authorization: `Bearer ${token}` } }
-);
+      const params = new URLSearchParams({
+        deviceId,
+        bank: selectedBank,
+      });
+      if (logDateRange.from) params.append("from", logDateRange.from);
+      if (logDateRange.to) params.append("to", logDateRange.to);
+      const res = await fetch(`${API_BASE_URL}/telemetry/battery/logs?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       const result = await res.json();
 

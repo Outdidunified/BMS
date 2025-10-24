@@ -9,6 +9,7 @@ const DEFAULT_BANK_NAME = 'IPS BATT BANK';
 const ABNORMAL_TEMP_C = 45;
 const CURRENT_MULTIPLIER_THRESHOLD = 1.25; // > 125% of rated capacity is abnormal
 const MAX_EXPORT_RECORDS = 10000;
+const MAX_BATTERY_LOGS = 5000;
 
 function parseDateMaybe(v) {
     if (!v) return null;
@@ -290,15 +291,19 @@ export async function batteryLogs(req, res) {
         const di = String(req.query.deviceId || '').trim();
         if (!di) return res.fail('The \'di\' query parameter is required.', 400);
 
-        const startDate = parseDateMaybe(req.query.startDate);
-        const endDate = parseDateMaybe(req.query.endDate);
-        const bankNameFilter = String(req.query.bankName || '').trim();
+        const rawStart = req.query.startDate ?? req.query.from;
+        const rawEnd = req.query.endDate ?? req.query.to;
+        const startDate = parseDateMaybe(rawStart);
+        const endDate = parseDateMaybe(rawEnd);
+        const bankNameFilter = String((req.query.bankName ?? req.query.bank) || '').trim();
 
-        // Find device
+        let limit = parseInt(String(req.query.limit || MAX_BATTERY_LOGS), 10);
+        if (!Number.isFinite(limit) || limit <= 0) limit = MAX_BATTERY_LOGS;
+        limit = Math.min(limit, MAX_BATTERY_LOGS);
+
         const device = await Device.findOne({ $or: [{ deviceId: di }, { DI: di }] });
         if (!device) return res.fail('Device not found.', 404);
 
-        // Get station to determine bankName
         const db = getDb();
         let actualBankName = DEFAULT_BANK_NAME;
         if (device.station_id) {
@@ -306,12 +311,10 @@ export async function batteryLogs(req, res) {
             if (station && station.name) actualBankName = station.name;
         }
 
-        // If bankName provided and doesn't match, fail
         if (bankNameFilter && bankNameFilter !== actualBankName) {
             return res.fail('Bank name does not match device\'s bank.', 400);
         }
 
-        // Fetch telemetry
         const match = { $or: [{ 'device.DI': di }, { 'deviceFull.deviceId': di }] };
         if (startDate || endDate) {
             match.timestamp = {};
@@ -319,10 +322,12 @@ export async function batteryLogs(req, res) {
             if (endDate) match.timestamp.$lte = endDate;
         }
 
-        const docs = await Telemetry.collection
+        const docsDesc = await Telemetry.collection
             .find(match)
-            .sort({ timestamp: 1 })
+            .sort({ timestamp: -1 })
+            .limit(limit)
             .toArray();
+        const docs = docsDesc.reverse();
 
         // Aggregate parameters
         const parameters = {

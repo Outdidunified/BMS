@@ -572,6 +572,7 @@ export async function getChartData(req, res) {
             telemetryModel,
             warningModel,
             deviceFilter,
+            stationIdStrings,
             emptyPayload
         } = await resolveDashboardContext(req);
 

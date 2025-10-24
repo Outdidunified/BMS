@@ -1,4 +1,4 @@
-import PlaceholderImg from "@/assets/images/background/placeholder.svg";
+import PlaceholderImg from "@/assets/images/background/Train.jpg";
 import LocalePicker from "@/components/locale-picker";
 import Logo from "@/components/logo";
 import { GLOBAL_CONFIG } from "@/global-config";
@@ -20,7 +20,7 @@ function LoginPage() {
 	}
 
 	return (
-		<div className="relative grid min-h-svh lg:grid-cols-2 bg-background">
+		<div className="relative grid min-h-svh lg:grid-cols-[1fr_1.5fr] bg-background">
 			<div className="flex flex-col gap-4 p-6 md:p-10">
 				<div className="flex justify-center gap-2 md:justify-start">
 					<div className="flex items-center gap-2 font-medium cursor-pointer">
