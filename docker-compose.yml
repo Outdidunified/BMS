@@ -30,7 +30,18 @@ services:
       - ./BACKEND/.env.${ENV}
     environment:
       ENV: ${ENV}
-      NODE_ENV: ${ENV}            
+      NODE_ENV: ${ENV}
+
+  device-simulator:
+    container_name: device-simulator
+    build: ./DEVICE_SIMULATOR
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - appnet
+    environment:
+      INGEST_HOST: http://backend
 
 networks:
   appnet:
