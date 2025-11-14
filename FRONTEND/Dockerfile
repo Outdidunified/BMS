@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install git (needed for lefthook)
+RUN apk add --no-cache git
+
 # Copy package files
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
