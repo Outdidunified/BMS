@@ -13,9 +13,9 @@ COPY pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies (skip lefthook in Docker environment)
-ENV CI=true LEFTHOOK=0
-RUN pnpm install
+# Disable all git hooks and lifecycle scripts for Docker build
+ENV CI=true LEFTHOOK=0 HUSKY=0 PNPM_IGNORE_SCRIPTS=1
+RUN pnpm install --ignore-scripts
 
 # Copy source code
 COPY . .
