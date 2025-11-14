@@ -46,9 +46,9 @@ export default defineConfig(({ mode }) => {
 		build: {
 			target: "esnext",
 			minify: "esbuild",
-			sourcemap: !isProduction,
+			sourcemap: false, // Disable sourcemaps to reduce memory usage
 			cssCodeSplit: true,
-			chunkSizeWarningLimit: 1500,
+			chunkSizeWarningLimit: 2000,
 			rollupOptions: {
 				output: {
 					manualChunks: {
