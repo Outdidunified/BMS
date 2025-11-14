@@ -27,10 +27,10 @@ services:
     volumes:
       - ./BACKEND/public:/app/public
     env_file:
-      - ./BACKEND/.env.${ENV}
+      - ./BACKEND/.env
     environment:
-      ENV: ${ENV}
-      NODE_ENV: ${ENV}
+      ENV: ${ENV:-production}
+      NODE_ENV: ${ENV:-production}
 
   device-simulator:
     container_name: device-simulator
