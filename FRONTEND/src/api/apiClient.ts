@@ -17,11 +17,11 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
 	(config) => {
 		// Attach auth token from sessionStorage (check both 'authToken' and 'token' keys)
-		const token = sessionStorage.getItem("authToken") || sessionStorage.getItem("token") || userStore.getState().token;
+		const token = sessionStorage.getItem("authToken") || sessionStorage.getItem("token") || userStore.getState().userToken.accessToken;
 		console.log("🔑 Token being sent:", token ? `${token.substring(0, 20)}...` : "NO TOKEN FOUND");
 		console.log("📦 SessionStorage authToken:", sessionStorage.getItem("authToken"));
 		console.log("📦 SessionStorage token:", sessionStorage.getItem("token"));
-		console.log("📦 UserStore token:", userStore.getState().token);
+		console.log("📦 UserStore token:", userStore.getState().userToken.accessToken);
 		if (token) config.headers.Authorization = `Bearer ${token}`;
 		return config;
 	},
