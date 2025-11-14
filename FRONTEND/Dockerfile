@@ -20,9 +20,10 @@ RUN pnpm install --ignore-scripts
 # Copy source code
 COPY . .
 
-# Build the application (increase Node.js memory limit, skip TypeScript check)
+# Build the application (increase Node.js memory limit)
 ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN export NODE_OPTIONS="--max-old-space-size=4096" && npx vite build --max-old-space-size=4096
+ENV CI=true LEFTHOOK=0 HUSKY=0 PNPM_IGNORE_SCRIPTS=1
+RUN pnpm run build
 
 # Production stage
 FROM nginx:alpine
