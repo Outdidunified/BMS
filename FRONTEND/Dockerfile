@@ -22,7 +22,7 @@ COPY . .
 
 # Build the application (increase Node.js memory limit, skip TypeScript check)
 ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN npx vite build
+RUN export NODE_OPTIONS="--max-old-space-size=4096" && npx vite build --max-old-space-size=4096
 
 # Production stage
 FROM nginx:alpine
