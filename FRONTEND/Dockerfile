@@ -13,7 +13,8 @@ COPY pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies
+# Install dependencies (skip lefthook in CI environment)
+ENV CI=true
 RUN pnpm install
 
 # Copy source code
