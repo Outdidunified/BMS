@@ -20,7 +20,7 @@ RUN pnpm install --ignore-scripts
 # Copy source code
 COPY . .
 
-# Build the application (increase Node.js memory limit)
+# Build the application (simplified build process with verbose logging)
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV CI=true LEFTHOOK=0 HUSKY=0 PNPM_IGNORE_SCRIPTS=1
 RUN pnpm run build

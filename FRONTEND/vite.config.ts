@@ -45,18 +45,13 @@ export default defineConfig(({ mode }) => {
 
 		build: {
 			target: "esnext",
-			minify: "esbuild",
+			minify: false, // Disable minification to speed up build
 			sourcemap: false, // Disable sourcemaps to reduce memory usage
-			cssCodeSplit: true,
-			chunkSizeWarningLimit: 2000,
+			cssCodeSplit: false, // Disable CSS splitting to simplify build
+			chunkSizeWarningLimit: 5000, // Increase chunk size limit
 			rollupOptions: {
 				output: {
-					manualChunks: {
-						"vendor-core": ["react", "react-dom", "react-router"],
-						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
-						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
-						"vendor-charts": ["apexcharts", "react-apexcharts"],
-					},
+					manualChunks: undefined, // Disable manual chunking to simplify
 				},
 			},
 		},
