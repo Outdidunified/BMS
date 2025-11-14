@@ -13,8 +13,8 @@ COPY pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-# Install dependencies (skip lefthook in CI environment)
-ENV CI=true
+# Install dependencies (skip lefthook in Docker environment)
+ENV CI=true LEFTHOOK=0
 RUN pnpm install
 
 # Copy source code
