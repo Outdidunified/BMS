@@ -60,7 +60,7 @@ export default function HistoryDevicesTab() {
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Device History</h2>
-          <p className="text-gray-500">View historical telemetry data for your BMS devices</p>
+          <p className="text-gray-500">View historical telemetry data for your DataHive devices</p>
         </div>
       </div>
 

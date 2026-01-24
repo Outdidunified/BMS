@@ -47,7 +47,7 @@ apiApp.get('/health', (_req, res) => {
 });
 apiApp.get('/docs', (_req, res) => {
     res.ok({
-        name: 'BMS API',
+        name: 'DataHive API',
         env,
         routes: {
             health: '/health',
@@ -277,6 +277,25 @@ async function start() {
             logger.loggerError(`Disconnected check error: ${err.message || err}`);
         }
     }, 5 * 60 * 1000); // Every 5 minutes
+
+    // Graceful shutdown
+    const shutdown = async () => {
+        logger.loggerInfo('Shutting down gracefully...');
+        try {
+            const telemetryBatcher = (await import('./services/telemetryBatcher.js')).default;
+            await telemetryBatcher.flush();
+            const { closeDB } = await import('./config/db.js');
+            await closeDB();
+            logger.loggerSuccess('Shutdown complete');
+            process.exit(0);
+        } catch (err) {
+            logger.loggerError(`Shutdown error: ${err.message}`);
+            process.exit(1);
+        }
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
 }
 
 start().catch((err) => {

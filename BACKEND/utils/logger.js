@@ -8,7 +8,7 @@ if (!fs.existsSync(logsDirectory)) {
     fs.mkdirSync(logsDirectory, { recursive: true });
 }
 
-const logFilename = path.join(logsDirectory, 'BMS.log');
+const logFilename = path.join(logsDirectory, 'DataHive.log');
 // ANSI color codes for terminal output
 const ansiReset = '\x1B[0m';
 const ansiGreen = '\x1B[32m';

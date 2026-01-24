@@ -8,7 +8,7 @@ dotenv.config();
 const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 8070}`;
 const LOGIN_EMAIL = process.env.TEST_EMAIL || 'superadmin@gmail.com';
 const LOGIN_PASSWORD = process.env.TEST_PASSWORD || 'Superadmin@123';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/BMS';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/DataHive';
 
 function approxEqual(a, b, epsilon = 1e-3) {
   if (a == null && b == null) return true;

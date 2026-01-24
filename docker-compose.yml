@@ -8,13 +8,13 @@ services:
       - backend
     restart: always
     networks:
-      - appnet      
+      - appnet
 
   backend:
     container_name: backend
     build:
       context: ./BACKEND
-      target: ${BUILD_TARGET:-production}     # selects the correct Dockerfile stage
+      target: ${BUILD_TARGET:-production} # selects the correct Dockerfile stage
     ports:
       - "8070:8070" # Http
       - "8071:8071" # WebSocket

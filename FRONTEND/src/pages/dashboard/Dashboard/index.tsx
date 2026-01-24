@@ -1,3 +1,3 @@
-import BMSDashboard from "./bms-dashboard";
+import DataHiveDashboard from "./bms-dashboard";
 
-export default BMSDashboard;
+export default DataHiveDashboard;

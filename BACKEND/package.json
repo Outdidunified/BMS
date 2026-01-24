@@ -1,7 +1,7 @@
 {
-    "name": "bms-backend",
+    "name": "datahive-backend",
     "version": "0.1.0",
-    "description": "Battery Monitoring System backend (Express + MongoDB + WebSocket)",
+    "description": "DataHive Monitoring System backend (Express + MongoDB + WebSocket)",
     "main": "app.js",
     "type": "module",
     "scripts": {

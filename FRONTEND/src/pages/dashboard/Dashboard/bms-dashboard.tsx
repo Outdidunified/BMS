@@ -13,7 +13,7 @@ import dashboardService, {
 import devicesService, { type DeviceDoc } from "@/api/services/devicesService";
 import { useUserToken } from "@/store/userStore";
 
-export default function BMSDashboard() {
+export default function DataHiveDashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [devices, setDevices] = useState<DeviceDoc[]>([]);
 
@@ -360,10 +360,10 @@ export default function BMSDashboard() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-none shadow-none">
           <div>
             <Title as="h4" className="text-xl mb-1">
-              BMS Dashboard Overview
+              DataHive Dashboard Overview
             </Title>
             <Text variant="body2" className="text-muted-foreground">
-              Monitor battery management system metrics and analytics.
+              Monitor DataHive management system metrics and analytics.
             </Text>
           </div>
         </div>
@@ -387,10 +387,10 @@ export default function BMSDashboard() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-none shadow-none">
           <div>
             <Title as="h4" className="text-xl mb-1">
-              BMS Dashboard Overview
+              DataHive Dashboard Overview
             </Title>
             <Text variant="body2" className="text-muted-foreground">
-              Monitor battery management system metrics and analytics.
+              Monitor DataHive management system metrics and analytics.
             </Text>
           </div>
         </div>
@@ -414,7 +414,7 @@ export default function BMSDashboard() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-none shadow-none">
         <div>
           <Title as="h4" className="text-xl mb-1">
-            BMS Dashboard Overview
+            DataHive Dashboard Overview
           </Title>
           <Text variant="body2" className="text-muted-foreground">
             Monitor battery management system metrics and analytics.

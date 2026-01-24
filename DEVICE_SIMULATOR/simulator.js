@@ -17,14 +17,14 @@ const INGEST_PATH = process.env.INGEST_PATH || '/data';
 const API_KEY = process.env.API_KEY || '';
 
 // Single-device fallback identifiers
-const DI_ENV = process.env.DI || 'BMS001';
+const DI_ENV = process.env.DI || 'DH001';
 const BI_ENV = process.env.BI || 'BAT1001';
 const MI_ENV = process.env.MI || '02:00:00:00:00:01';
 
 // Multi-device configuration
 const NUM_DEVICES = Math.max(1, Number(process.env.NUM_DEVICES || 1));
 const START_INDEX = Math.max(1, Number(process.env.START_INDEX || 1));
-const DI_PREFIX = process.env.DI_PREFIX || 'BMS';
+const DI_PREFIX = process.env.DI_PREFIX || 'DH';
 const BI_PREFIX = process.env.BI_PREFIX || 'BAT';
 const DEVICES_JSON = process.env.DEVICES_JSON || '';
 const DEVICES_CSV = process.env.DEVICES_CSV || '';
