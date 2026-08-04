@@ -12,7 +12,7 @@ let client;
 let db;
 
 export async function connectDB() {
-    const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/BMS';
+    const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/DataHive';
     try {
         client = new MongoClient(uri, {
             maxPoolSize: 20,

@@ -4,6 +4,7 @@ import { handleIncomingFrame, broadcast } from '../Websocket/hub.js';
 import { evaluateAndSendAlerts } from '../utils/alerts.js';
 import logger from '../utils/logger.js';
 import telemetryCycleProcessor from '../services/telemetryCycleProcessor.js';
+import telemetryBatcher from '../services/telemetryBatcher.js';
 
 export async function ingestData(req, res) {
     try {
@@ -179,7 +180,7 @@ export async function ingestData(req, res) {
             apiKey: telemetryMetadata.apiKey,
         };
 
-        await Telemetry.collection.insertOne(doc);
+        telemetryBatcher.add(doc);
         handleIncomingFrame(doc);
 
         telemetryCycleProcessor.processDocument(doc).catch((err) => {

@@ -2,7 +2,7 @@
 <br> 
 <br>
 <img src="./src/assets/icons/ic-logo-badge.svg" height="140" />
-<h3> BMS </h3>
+<h3> DataHive </h3>
   <p>
     <p style="font-size: 14px">
       Slash Admin is a modern admin dashboard template built with React 19, Vite, shadcn/ui, and TypeScript. It is designed to help developers quickly create powerful admin management systems.

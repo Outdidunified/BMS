@@ -239,7 +239,7 @@ const newStatus = !device.status;   try {
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Device Overview</h2>
-          <p className="text-gray-500">Monitor and manage all your BMS devices</p>
+          <p className="text-gray-500">Monitor and manage all your DataHive devices</p>
         </div>
         <Button
           className="flex items-center gap-2 text-green-600 hover:text-green-700 bg-transparent"

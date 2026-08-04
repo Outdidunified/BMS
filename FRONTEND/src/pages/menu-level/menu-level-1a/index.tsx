@@ -636,7 +636,7 @@ useEffect(() => {
                     <div className="w-20 h-20 bg-gray-300 border-2 border-blue-500 rounded flex items-center justify-center">
                       <Icon icon="mdi:gauge" size="40" />
                     </div>
-                    <p className="mt-2">BMS</p>
+                    <p className="mt-2">DataHive</p>
                   </div>
                   <Icon icon="mdi:arrow-right" size="32" />
                   <div className="text-center">

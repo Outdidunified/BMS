@@ -80,7 +80,7 @@ export async function evaluateAndSendAlerts(device, doc) {
         const transporter = getTransport();
         if (!transporter) return; // SMTP not configured
 
-        const subject = `[BMS Alert] ${device.DI} issues detected`;
+        const subject = `[DataHive Alert] ${device.DI} issues detected`;
         const text = `Device ${device.DI} at ${doc.timestamp?.toISOString()}:\n` + issues.join('\n');
         await transporter.sendMail({ from: 'bms@system.local', to: recipients.join(','), subject, text });
         logger.loggerInfo(`Alert email sent DI=${device.DI} recipients=${recipients.length}`);

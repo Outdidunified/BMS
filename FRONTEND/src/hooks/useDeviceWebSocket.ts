@@ -18,7 +18,7 @@ interface UseDeviceWebSocketOptions {
 // Reusable WebSocket hook for backend live frames
 export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
   const {
-    url = "ws://192.168.0.35:8070",
+    url,
     onMessage,
     reconnect = true,
     reconnectDelayMs = 2000,
@@ -38,7 +38,12 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
       if (cancelled) return;
       messageQueue.current = []; // Clear queue for new connection
       try {
-        const ws = new WebSocket(url);
+        let finalUrl = url || "ws://localhost:8071";
+        if (finalUrl.startsWith("/")) {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          finalUrl = `${protocol}//${window.location.host}${finalUrl}`;
+        }
+        const ws = new WebSocket(finalUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {

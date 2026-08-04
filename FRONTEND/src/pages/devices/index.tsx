@@ -266,7 +266,7 @@ function DevicesPage() {
           <div>
             <CardTitle className="text-2xl font-bold">Device Management</CardTitle>
             <CardDescription>
-              Monitor and manage all your BMS devices from a single interface
+              Monitor and manage all your DataHive devices from a single interface
             </CardDescription>
           </div>
           {isAdmin && (
